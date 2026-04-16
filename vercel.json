@@ -2,12 +2,12 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run build --workspace=packages/types && npm run build --workspace=apps/web && cp -r apps/web/dist apps/api/public && npm run build --workspace=apps/api",
-  "builds": [
-    {
-      "src": "apps/api/dist/index.js",
-      "use": "@vercel/node"
+  "outputDirectory": "apps/api/dist",
+  "functions": {
+    "apps/api/dist/index.js": {
+      "runtime": "nodejs20.x"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",

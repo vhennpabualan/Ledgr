@@ -255,33 +255,6 @@ function RecentRow({ expense }: { expense: Expense }) {
   );
 }
 
-// ─── Budget progress row ──────────────────────────────────────────────────────
-
-function BudgetRow({ status, categoryName }: { status: BudgetStatus; categoryName: string }) {
-  const pct = Math.min(status.percentUsed, 100);
-  const barColor =
-    status.isOverBudget ? 'bg-red-500' :
-    status.thresholdReached ? 'bg-amber-400' :
-    'bg-emerald-500';
-
-  return (
-    <div className="py-2.5 border-b border-gray-100 last:border-0">
-      <div className="flex justify-between text-sm mb-1">
-        <span className="font-medium text-gray-800 truncate">{categoryName}</span>
-        <span className="ml-2 shrink-0 text-gray-500 text-xs">
-          {formatPHP(status.spent)} / {formatPHP(status.budget.limitAmount)}
-        </span>
-      </div>
-      <div className="h-1.5 w-full rounded-full bg-gray-100">
-        <div
-          className={`h-1.5 rounded-full transition-all ${barColor}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 // ─── Pending Items Card ───────────────────────────────────────────────────────
 
 interface PendingItemsCardProps {
@@ -608,8 +581,8 @@ export default function DashboardPage() {
                 tickLine={false}
               />
               <Tooltip
-                formatter={(v: number) => [formatPHP(v), 'Spent']}
-                labelFormatter={monthLabel}
+                formatter={(v: unknown) => [formatPHP(v as number), 'Spent']}
+                labelFormatter={(label: unknown) => monthLabel(label as string)}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
               />
               <Area

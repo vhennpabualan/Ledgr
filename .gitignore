@@ -39,6 +39,7 @@ coverage/
 # Build artifacts
 *.tsbuildinfo
 .turbo/
+apps/api/public/
 
 # Uploads / local storage
 uploads/

@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:prod",
-  "outputDirectory": "apps/api/dist",
+  "buildCommand": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
   "installCommand": "npm install",
   "framework": null,
   "builds": [

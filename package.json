@@ -11,7 +11,7 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces --if-present",
     "build:prod": "npm run build --workspace=packages/types && npm run build --workspace=apps/web && npm run build --workspace=apps/api",
-    "build:vercel": "npm run build --workspace=packages/types && npm run build --workspace=apps/web && npm run build --workspace=apps/api",
+    "build:vercel": "npm run build --workspace=packages/types && npm run build --workspace=apps/web",
     "build:railway": "npm run build --workspace=packages/types && npm run build --workspace=apps/api",
     "lint": "npm run lint --workspaces --if-present"
   },

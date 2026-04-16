@@ -1,7 +1,17 @@
 {
   "version": 2,
   "installCommand": "npm install",
-  "buildCommand": "npm run build:vercel",
-  "outputDirectory": "apps/web/dist",
-  "framework": null
+  "buildCommand": "npm run build --workspace=packages/types && npm run build --workspace=apps/web && cp -r apps/web/dist apps/api/public && npm run build --workspace=apps/api",
+  "builds": [
+    {
+      "src": "apps/api/dist/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "apps/api/dist/index.js"
+    }
+  ]
 }

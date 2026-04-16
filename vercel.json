@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
+  "buildCommand": "node build.mjs",
   "installCommand": "npm install",
   "framework": null,
   "builds": [

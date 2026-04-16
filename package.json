@@ -11,6 +11,7 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces --if-present",
     "build:prod": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
+    "build:vercel": "cd apps/web && npm run build && cd ../api && npm run build",
     "lint": "npm run lint --workspaces --if-present"
   },
   "engines": {

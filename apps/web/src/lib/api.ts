@@ -33,7 +33,7 @@ export function setApiToken(token: string | null): void {
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
   withCredentials: true, // send httpOnly refresh-token cookie automatically
   headers: { 'Content-Type': 'application/json' },
 });
@@ -64,9 +64,12 @@ api.interceptors.response.use(
 
       try {
         const { data } = await axios.post<{ accessToken: string }>(
-          `${import.meta.env.VITE_API_BASE_URL}/auth/refresh`,
+          '/auth/refresh',
           {},
-          { withCredentials: true },
+          {
+            baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+            withCredentials: true,
+          },
         );
 
         setApiToken(data.accessToken);

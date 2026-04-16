@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Try to refresh token on mount (uses httpOnly cookie)
   useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
+    const API_BASE = (import.meta.env.VITE_API_BASE_URL as string ?? '/api').replace(/\/$/, '');
     fetch(`${API_BASE}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',

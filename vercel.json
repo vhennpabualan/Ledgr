@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:vercel",
+  "buildCommand": "npm run build --workspace=packages/types ; npm run build --workspace=apps/web",
   "installCommand": "npm install",
   "outputDirectory": "apps/web/dist",
   "framework": null

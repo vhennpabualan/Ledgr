@@ -10,6 +10,7 @@
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces --if-present",
+    "build:prod": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
     "lint": "npm run lint --workspaces --if-present"
   },
   "engines": {

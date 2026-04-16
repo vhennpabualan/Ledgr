@@ -1,6 +1,7 @@
 node_modules/
 dist/
 build/
+.kiro/
 
 # Env files — never commit real secrets
 .env

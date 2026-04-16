@@ -13,7 +13,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "paths": {
-      "@ledgr/types": ["../../packages/types/src/index.ts"]
+      "@ledgr/types": ["../../packages/types/dist/index.d.ts"]
     }
   },
   "ts-node": {

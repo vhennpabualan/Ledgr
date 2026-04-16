@@ -1,8 +1,16 @@
 {
   "version": 2,
   "installCommand": "npm install",
-  "buildCommand": "npm run build:vercel",
-  "outputDirectory": "apps/web/dist",
+  "builds": [
+    {
+      "src": "apps/web/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "buildCommand": "cd ../.. && npm run build:vercel",
+        "distDir": "dist"
+      }
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

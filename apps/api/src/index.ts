@@ -36,13 +36,11 @@ app.use('/api/pending',    pendingItemsRouter);
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
-});
-
-if (process.env.VERCEL !== '1') {
+// Only skip listen in Vercel serverless environment
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`API running on port ${PORT}`);
   });
 }
+
 export default app;

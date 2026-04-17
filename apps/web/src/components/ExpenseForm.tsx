@@ -165,19 +165,17 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
   }
 
   const inputClass = (hasError?: string) =>
-    `w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors ${
-      hasError ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white'
+    `w-full rounded-xl border px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500 ${
+      hasError ? 'border-red-300 bg-red-50/60 dark:bg-red-900/20' : 'border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06]'
     }`;
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5 pt-1">
       {/* Amount */}
       <div>
-        <label htmlFor="ef-amount" className="block text-sm font-medium text-gray-700 mb-1">
-          Amount
-        </label>
+        <label htmlFor="ef-amount" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Amount</label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm select-none">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm select-none">
             {form.currency || 'PHP'}
           </span>
           <input
@@ -204,9 +202,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
 
       {/* Currency */}
       <div>
-        <label htmlFor="ef-currency" className="block text-sm font-medium text-gray-700 mb-1">
-          Currency
-        </label>
+        <label htmlFor="ef-currency" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Currency</label>
         <input
           id="ef-currency"
           type="text"
@@ -222,9 +218,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
 
       {/* Date */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Date
-        </label>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date</label>
         <DatePicker
           id="ef-date"
           label="Date"
@@ -247,9 +241,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
 
       {/* Category */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Category
-        </label>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Category</label>
         <div className="relative">
           <button
             type="button"
@@ -259,9 +251,9 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
             disabled={categoriesLoading}
             aria-describedby={errors.categoryId ? 'ef-category-error' : undefined}
             aria-invalid={!!errors.categoryId}
-            className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors disabled:opacity-50 ${
-              errors.categoryId ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white'
-            } ${form.categoryId ? 'text-gray-900' : 'text-gray-400'}`}
+          className={`w-full flex items-center justify-between rounded-xl border px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-colors disabled:opacity-50 ${
+              errors.categoryId ? 'border-red-300 bg-red-50/60 dark:bg-red-900/20' : 'border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06]'
+            } ${form.categoryId ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}
           >
             <span>
               {categoriesLoading
@@ -277,7 +269,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
           {categoryOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setCategoryOpen(false)} aria-hidden="true" />
-              <ul role="listbox" aria-label="Category" className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg max-h-52 overflow-y-auto py-1">
+              <ul role="listbox" aria-label="Category" className="absolute z-20 mt-1 w-full rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#1a1a2e]/90 backdrop-blur-md shadow-lg max-h-52 overflow-y-auto py-1">
                 {categories.map((cat) => (
                   <li
                     key={cat.id}
@@ -289,7 +281,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
                       setCategoryOpen(false);
                     }}
                     className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer select-none transition-colors ${
-                      form.categoryId === cat.id ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'
+                      form.categoryId === cat.id ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
                     }`}
                   >
                     <span aria-hidden="true">{cat.icon}</span>
@@ -309,9 +301,8 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
 
       {/* Description */}
       <div>
-        <label htmlFor="ef-description" className="block text-sm font-medium text-gray-700 mb-1">
-          Description
-          <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
+        <label htmlFor="ef-description" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+          Description <span className="font-normal text-gray-400 dark:text-gray-500">(optional)</span>
         </label>
         <textarea
           id="ef-description"
@@ -322,16 +313,15 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
           onChange={field('description')}
           className={`${inputClass()} resize-none`}
         />
-        <p className="mt-1 text-xs text-gray-400 text-right">
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 text-right">
           {form.description.length}/500
         </p>
       </div>
 
       {/* Receipt */}
       <div>
-        <label htmlFor="ef-receipt" className="block text-sm font-medium text-gray-700 mb-1">
-          Receipt
-          <span className="ml-1 text-xs font-normal text-gray-400">(optional)</span>
+        <label htmlFor="ef-receipt" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+          Receipt <span className="font-normal text-gray-400 dark:text-gray-500">(optional)</span>
         </label>
 
         {/* Existing receipt preview */}
@@ -350,7 +340,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
                 href={expense.receiptUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-gray-600 underline hover:text-gray-900"
+                className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 underline hover:text-gray-900 dark:hover:text-gray-100"
               >
                 📎 View receipt
               </a>
@@ -370,7 +360,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
                   setDeletingReceipt(false);
                 }
               }}
-              className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="flex items-center gap-1 rounded-xl border border-red-200/60 px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50/80 disabled:opacity-50 transition-colors focus:outline-none"
               aria-label="Delete receipt"
             >
               {deletingReceipt ? (
@@ -396,42 +386,34 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
             setForm((prev) => ({ ...prev, receiptFile: file }));
             if (errors.receipt) setErrors((prev) => ({ ...prev, receipt: undefined }));
           }}
-          className="w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 transition-colors cursor-pointer"
+          className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 dark:file:bg-white/[0.08] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 dark:file:text-gray-200 hover:file:bg-gray-200 dark:hover:file:bg-white/[0.12] transition-colors cursor-pointer"
         />
 
         {uploadingReceipt && (
-          <p className="mt-1.5 text-xs text-gray-500 animate-pulse">Uploading receipt…</p>
+          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 animate-pulse">Uploading receipt…</p>
         )}
 
         {errors.receipt && (
-          <p role="alert" className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+          <p role="alert" className="mt-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50/60 dark:bg-amber-900/20 border border-amber-200/60 rounded-xl px-2 py-1">
             {errors.receipt}
           </p>
         )}
       </div>
 
-      {/* Submit error */}
       {errors.submit && (
-        <p role="alert" className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+        <p role="alert" className="rounded-xl bg-red-50/60 dark:bg-red-900/20 border border-red-200/60 px-3 py-2 text-sm text-red-600 dark:text-red-400">
           {errors.submit}
         </p>
       )}
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={mutation.isPending}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900"
-        >
+        <button type="button" onClick={onCancel} disabled={mutation.isPending}
+          className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-50 transition-colors focus:outline-none">
           Cancel
         </button>
-        <button
-          type="submit"
-          disabled={mutation.isPending || uploadingReceipt}
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
-        >
+        <button type="submit" disabled={mutation.isPending || uploadingReceipt}
+          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
           {uploadingReceipt ? 'Uploading…' : mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Add expense'}
         </button>
       </div>

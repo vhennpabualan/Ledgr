@@ -211,3 +211,13 @@ export const pendingItemsApi = {
   deliver: (id: string) =>
     api.post<{ expenseId: string }>(`/pending/${id}/deliver`),
 };
+
+// ─── Account management ───────────────────────────────────────────────────────
+
+export const accountApi = {
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.patch('/auth/password', data),
+
+  deleteAccount: (data: { password: string }) =>
+    api.delete('/auth/account', { data }),
+};

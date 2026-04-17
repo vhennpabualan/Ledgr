@@ -5,112 +5,62 @@ import type { Expense, Category, PaginatedResult } from '@ledgr/types';
 import ExpenseForm from '../components/ExpenseForm';
 import DatePicker from '../components/DatePicker';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Convert minor units (centavos) → "₱1,234.56" */
 function formatPHP(minorUnits: number): string {
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    currencyDisplay: 'symbol',
-  }).format(minorUnits / 100);
+  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minorUnits / 100);
 }
-
-/** "2024-06-15" → "Jun 15, 2024" */
 function formatDate(iso: string): string {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Filters {
-  from?: string;
-  to?: string;
-  categoryIds?: string[];
-  page: number;
-  pageSize: number;
-}
-
+interface Filters { from?: string; to?: string; categoryIds?: string[]; page: number; pageSize: number; }
 const DEFAULT_FILTERS: Filters = { page: 1, pageSize: 20 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const glass = 'rounded-2xl border border-white/70 bg-white/50 backdrop-blur-md shadow-sm shadow-black/[0.06] dark:border-white/[0.08] dark:bg-white/[0.04]';
 
+// ─── Receipt indicator ────────────────────────────────────────────────────────
 
-interface CategoryBadgeProps {
-  category: Category | undefined;
+function ReceiptIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-indigo-400" viewBox="0 0 20 20" fill="currentColor" aria-label="Has receipt">
+      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+    </svg>
+  );
 }
-function CategoryBadge({ category }: CategoryBadgeProps) {
+
+// ─── Category badge ───────────────────────────────────────────────────────────
+
+function CategoryBadge({ category }: { category: Category | undefined }) {
   if (!category) return <span className="text-gray-400 text-sm">—</span>;
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">
       <span role="img" aria-label={category.name}>{category.icon}</span>
-      <span className="text-gray-700">{category.name}</span>
+      <span className="text-gray-700 dark:text-gray-200">{category.name}</span>
     </span>
   );
 }
 
-// ─── Delete confirmation dialog ───────────────────────────────────────────────
+// ─── Delete dialog ────────────────────────────────────────────────────────────
 
-interface DeleteDialogProps {
-  expense: Expense;
-  onCancel: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
-  error: string | null;
-}
-
-function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: DeleteDialogProps) {
+function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
+  expense: Expense; onCancel: () => void; onConfirm: () => void; isPending: boolean; error: string | null;
+}) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onCancel}
-        aria-hidden="true"
-      />
-      {/* Panel */}
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
-        <h2 id="delete-dialog-title" className="text-lg font-semibold text-gray-900 mb-2">
-          Delete expense?
-        </h2>
-        <p className="text-sm text-gray-500 mb-1">
-          This will remove the expense from your records. This action cannot be undone.
-        </p>
-        {/* Show the expense amount/description for context */}
-        <p className="text-sm font-medium text-gray-700 mb-4">
+    <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
+      <div className={`relative z-10 w-full max-w-sm ${glass} p-6`}>
+        <h2 id="delete-dialog-title" className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete expense?</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">This action cannot be undone.</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-4">
           {formatPHP(expense.amount)}{expense.description ? ` — ${expense.description}` : ''}
         </p>
-
-        {error && (
-          <p role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-
+        {error && <p role="alert" className="mb-4 rounded-xl bg-red-50/80 dark:bg-red-900/20 border border-red-200/60 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isPending}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900"
-          >
+          <button type="button" onClick={onCancel} disabled={isPending}
+            className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 transition-colors focus:outline-none">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isPending}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
-          >
+          <button type="button" onClick={onConfirm} disabled={isPending}
+            className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-40 transition-colors focus:outline-none">
             {isPending ? 'Deleting…' : 'Delete'}
           </button>
         </div>
@@ -119,7 +69,7 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: Delete
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ExpensesPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -127,194 +77,94 @@ export default function ExpensesPage() {
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => expensesApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
-      setDeletingExpense(null);
-      setDeleteError(null);
-    },
-    onError: (err: unknown) => {
-      const message =
-        err instanceof Error ? err.message : 'Failed to delete expense. Please try again.';
-      setDeleteError(message);
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['expenses'] }); setDeletingExpense(null); setDeleteError(null); },
+    onError: (err: unknown) => setDeleteError(err instanceof Error ? err.message : 'Failed to delete expense.'),
   });
 
-  function openCreate() {
-    setEditingExpense(undefined);
-    setShowForm(true);
-  }
+  function openEdit(expense: Expense) { setEditingExpense(expense); setShowForm(true); }
+  function closeForm() { setShowForm(false); setEditingExpense(undefined); }
+  function openDelete(e: React.MouseEvent, expense: Expense) { e.stopPropagation(); setDeleteError(null); setDeletingExpense(expense); }
+  function closeDelete() { if (deleteMutation.isPending) return; setDeletingExpense(null); setDeleteError(null); }
 
-  function openEdit(expense: Expense) {
-    setEditingExpense(expense);
-    setShowForm(true);
-  }
-
-  function closeForm() {
-    setShowForm(false);
-    setEditingExpense(undefined);
-  }
-
-  function openDelete(e: React.MouseEvent, expense: Expense) {
-    e.stopPropagation(); // prevent row click from opening edit
-    setDeleteError(null);
-    setDeletingExpense(expense);
-  }
-
-  function closeDelete() {
-    if (deleteMutation.isPending) return;
-    setDeletingExpense(null);
-    setDeleteError(null);
-  }
-
-  // ── Data fetching ──────────────────────────────────────────────────────────
-
-  const {
-    data: expensesData,
-    isLoading: expensesLoading,
-    isError: expensesError,
-    refetch,
-  } = useQuery<PaginatedResult<Expense>>({
+  const { data: expensesData, isLoading: expensesLoading, isError: expensesError, refetch } = useQuery<PaginatedResult<Expense>>({
     queryKey: ['expenses', filters],
     queryFn: () => expensesApi.list(filters).then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
-
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['categories'],
     queryFn: () => categoriesApi.list().then((r) => r.data),
+    staleTime: 10 * 60 * 1000, // categories rarely change
   });
-
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
-
-  // ── Filter helpers ─────────────────────────────────────────────────────────
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
   }
-
   function toggleCategory(id: string) {
     setFilters((prev) => {
       const current = prev.categoryIds ?? [];
-      const next = current.includes(id)
-        ? current.filter((c) => c !== id)
-        : [...current, id];
+      const next = current.includes(id) ? current.filter((c) => c !== id) : [...current, id];
       return { ...prev, categoryIds: next.length ? next : undefined, page: 1 };
     });
   }
 
-  function clearFilters() {
-    setFilters(DEFAULT_FILTERS);
-  }
+  const hasActiveFilters = !!filters.from || !!filters.to || (filters.categoryIds?.length ?? 0) > 0;
+  const totalPages = expensesData ? Math.max(1, Math.ceil(expensesData.total / filters.pageSize)) : 1;
 
-  const hasActiveFilters =
-    !!filters.from || !!filters.to || (filters.categoryIds?.length ?? 0) > 0;
-
-  // ── Pagination ─────────────────────────────────────────────────────────────
-
-  const totalPages = expensesData
-    ? Math.max(1, Math.ceil(expensesData.total / filters.pageSize))
-    : 1;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Page-level total (sum of current page only — labeled clearly)
+  const pageTotal = expensesData?.data.reduce((sum, e) => sum + e.amount, 0) ?? 0;
+  const hasMultiplePages = totalPages > 1;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Expenses</h1>
-        <button
-          type="button"
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
-          onClick={openCreate}
-        >
-          + Add Expense
-        </button>
-      </div>
+    <div className="space-y-5">
 
       {/* Filter bar */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-        <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-end">
-          {/* Date range */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <DatePicker
-              id="filter-from"
-              label="From"
-              value={filters.from ?? ''}
-              onChange={(v) => setFilter('from', v || undefined)}
-              max={filters.to}
-            />
+      <div className={`${glass} p-4 space-y-3 overflow-visible`}>
+        {/* Date range + Add button row */}
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+          <div className="flex items-center gap-2">
+            <DatePicker id="filter-from" label="From" value={filters.from ?? ''} onChange={(v) => setFilter('from', v || undefined)} max={filters.to} />
             <span className="text-gray-400 mt-5">–</span>
-            <DatePicker
-              id="filter-to"
-              label="To"
-              value={filters.to ?? ''}
-              onChange={(v) => setFilter('to', v || undefined)}
-              min={filters.from}
-              align="right"
-            />
+            <DatePicker id="filter-to" label="To" value={filters.to ?? ''} onChange={(v) => setFilter('to', v || undefined)} min={filters.from} align="right" />
           </div>
-
-          {/* Category multi-select */}
-          {categories.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <label htmlFor="filter-categories" className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Categories
-              </label>
-              <select
-                id="filter-categories"
-                multiple
-                size={Math.min(categories.length, 4)}
-                value={filters.categoryIds ?? []}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
-                  setFilters((prev) => ({
-                    ...prev,
-                    categoryIds: selected.length ? selected : undefined,
-                    page: 1,
-                  }));
-                }}
-                className="rounded-lg border border-gray-300 px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent min-w-[160px]"
-              >
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Clear filters */}
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="self-end rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900"
-            >
-              Clear filters
+          <div className="flex items-center gap-2 sm:ml-auto">
+            {hasActiveFilters && (
+              <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)}
+                className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors focus:outline-none">
+                Clear
+              </button>
+            )}
+            <button type="button" onClick={() => { setEditingExpense(undefined); setShowForm(true); }}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
+              + Add Expense
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Active category chips (for checkbox-style UX alongside the select) */}
-        {(filters.categoryIds?.length ?? 0) > 0 && (
+        {/* Category chips — tap to toggle, no multi-select */}
+        {categories.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {filters.categoryIds!.map((id) => {
-              const cat = categoryMap.get(id);
+            <span className="text-xs font-medium text-gray-400 dark:text-gray-500 self-center mr-1">Categories:</span>
+            {categories.map((cat) => {
+              const active = (filters.categoryIds ?? []).includes(cat.id);
               return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => toggleCategory(id)}
-                  className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-                  aria-label={`Remove ${cat?.name ?? id} filter`}
+                <button key={cat.id} type="button" onClick={() => toggleCategory(cat.id)}
+                  className={[
+                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all duration-150 focus:outline-none',
+                    active
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
+                      : 'bg-black/[0.04] dark:bg-white/[0.04] text-gray-600 dark:text-gray-300 hover:bg-black/[0.07] dark:hover:bg-white/[0.07]',
+                  ].join(' ')}
+                  aria-pressed={active}
                 >
-                  {cat?.icon} {cat?.name ?? id}
-                  <span aria-hidden="true" className="ml-0.5 text-gray-400">×</span>
+                  <span aria-hidden="true">{cat.icon}</span>
+                  {cat.name}
+                  {active && <span aria-hidden="true" className="ml-0.5 opacity-70">×</span>}
                 </button>
               );
             })}
@@ -323,160 +173,146 @@ export default function ExpensesPage() {
       </div>
 
       {/* Expense list */}
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className={`${glass} overflow-hidden`}>
         {expensesLoading ? (
-          /* Skeleton — shared between mobile and desktop */
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-black/[0.05]">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center justify-between px-4 py-3 gap-3" aria-hidden="true">
                 <div className="space-y-1.5 flex-1">
-                  <div className="h-3.5 w-24 rounded bg-gray-200 animate-pulse" />
-                  <div className="h-3 w-32 rounded bg-gray-200 animate-pulse" />
+                  <div className="h-3.5 w-24 rounded-lg bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
+                  <div className="h-3 w-32 rounded-lg bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
                 </div>
-                <div className="h-4 w-16 rounded bg-gray-200 animate-pulse" />
+                <div className="h-4 w-16 rounded-lg bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
               </div>
             ))}
           </div>
         ) : expensesError ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-sm text-gray-500 mb-3">Failed to load expenses. Try again.</p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900"
-            >
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Failed to load expenses.</p>
+            <button type="button" onClick={() => refetch()}
+              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors focus:outline-none">
               Retry
             </button>
           </div>
         ) : !expensesData?.data.length ? (
           <div className="px-4 py-16 text-center">
-            <p className="text-sm text-gray-400">No expenses yet. Add your first expense.</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">No expenses found. Try adjusting your filters.</p>
           </div>
         ) : (
           <>
-            {/* Desktop table — hidden on mobile */}
+            {/* Desktop table */}
             <table className="hidden md:table w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount</th>
-                  <th className="px-4 py-3 w-10"><span className="sr-only">Actions</span></th>
+                <tr className="border-b border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02]">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Category</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Description</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Amount</th>
+                  <th className="px-4 py-3 w-16"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-black/[0.05] dark:divide-white/[0.05]">
                 {expensesData.data.map((expense) => (
-                  <tr
-                    key={expense.id}
-                    onClick={() => openEdit(expense)}
-                    className="group cursor-pointer hover:bg-gray-50 transition-colors"
-                    tabIndex={0}
-                    role="button"
+                  <tr key={expense.id} onClick={() => openEdit(expense)}
+                    className="group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                    tabIndex={0} role="button"
                     aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); }
-                    }}
-                  >
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(expense.date)}</td>
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(expense.date)}</td>
                     <td className="px-4 py-3"><CategoryBadge category={categoryMap.get(expense.categoryId)} /></td>
-                    <td className="px-4 py-3 text-gray-700 max-w-xs truncate">{expense.description ?? <span className="text-gray-400">—</span>}</td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900 tabular-nums whitespace-nowrap">{formatPHP(expense.amount)}</td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200 max-w-xs">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="truncate">{expense.description ?? <span className="text-gray-400">—</span>}</span>
+                        {expense.receiptUrl && <ReceiptIcon />}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100 tabular-nums whitespace-nowrap">{formatPHP(expense.amount)}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={(e) => openDelete(e, expense)}
-                        className="rounded p-1 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 transition-all focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                        aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                        {/* Edit affordance */}
+                        <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Edit</span>
+                        <button type="button" onClick={(e) => openDelete(e, expense)}
+                          className="rounded-lg p-1 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-all focus:outline-none"
+                          aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
+              {/* Total footer row */}
+              <tfoot>
+                <tr className="border-t border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02]">
+                  <td colSpan={3} className="px-4 py-3 text-xs font-medium text-gray-400 dark:text-gray-500">
+                    {hasMultiplePages ? `Page ${filters.page} total` : `Total · ${expensesData.data.length} expense${expensesData.data.length !== 1 ? 's' : ''}`}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatPHP(pageTotal)}</td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
 
-            {/* Mobile card list — visible only on mobile */}
-            <ul className="md:hidden divide-y divide-gray-100">
+            {/* Mobile list */}
+            <ul className="md:hidden divide-y divide-black/[0.05] dark:divide-white/[0.05]">
               {expensesData.data.map((expense) => (
                 <li key={expense.id} className="relative">
-                  {/* Row — div instead of button to avoid nested button violation */}
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openEdit(expense)}
+                  <div role="button" tabIndex={0} onClick={() => openEdit(expense)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
-                    aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}
-                  >
-                    {/* Icon */}
-                    <span className="text-xl shrink-0" aria-hidden="true">
-                      {categoryMap.get(expense.categoryId)?.icon ?? '💸'}
-                    </span>
-                    {/* Main info */}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:bg-black/[0.04] dark:active:bg-white/[0.04] transition-colors cursor-pointer"
+                    aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}>
+                    <span className="text-xl shrink-0" aria-hidden="true">{categoryMap.get(expense.categoryId)?.icon ?? '💸'}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {expense.description ?? categoryMap.get(expense.categoryId)?.name ?? '—'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
+                          {expense.description ?? categoryMap.get(expense.categoryId)?.name ?? '—'}
+                        </p>
+                        {expense.receiptUrl && <ReceiptIcon />}
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                         {formatDate(expense.date)}
-                        {categoryMap.get(expense.categoryId) && (
-                          <span className="ml-1.5 text-gray-400">· {categoryMap.get(expense.categoryId)!.name}</span>
-                        )}
+                        {categoryMap.get(expense.categoryId) && <span className="ml-1.5">· {categoryMap.get(expense.categoryId)!.name}</span>}
                       </p>
                     </div>
-                    {/* Amount */}
-                    <span className="text-sm font-semibold text-gray-900 tabular-nums pr-10">
-                      {formatPHP(expense.amount)}
-                    </span>
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tabular-nums pr-10">{formatPHP(expense.amount)}</span>
                   </div>
-                  {/* Delete — absolutely positioned so it's outside the div[role=button] */}
-                  <button
-                    type="button"
-                    onClick={(e) => openDelete(e, expense)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                    aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}
-                  >
+                  <button type="button" onClick={(e) => openDelete(e, expense)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-colors focus:outline-none"
+                    aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </li>
               ))}
+              {/* Mobile total footer */}
+              <li className="flex items-center justify-between px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/[0.06] dark:border-white/[0.06]">
+                <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
+                  {hasMultiplePages ? `Page ${filters.page} total` : `${expensesData.data.length} expense${expensesData.data.length !== 1 ? 's' : ''}`}
+                </span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatPHP(pageTotal)}</span>
+              </li>
             </ul>
           </>
         )}
       </div>
 
       {/* Pagination */}
-      {!expensesError && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>
-            {expensesData
-              ? `${expensesData.total} expense${expensesData.total !== 1 ? 's' : ''}`
-              : ''}
-          </span>
+      {!expensesError && totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+          <span>{expensesData ? `${expensesData.total} total expense${expensesData.total !== 1 ? 's' : ''}` : ''}</span>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled={filters.page <= 1 || expensesLoading}
+            <button type="button" disabled={filters.page <= 1 || expensesLoading}
               onClick={() => setFilters((prev) => ({ ...prev, page: prev.page - 1 }))}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900"
-            >
+              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none">
               Previous
             </button>
-            <span className="text-gray-500">
-              Page {filters.page} of {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={filters.page >= totalPages || expensesLoading}
+            <span>Page {filters.page} of {totalPages}</span>
+            <button type="button" disabled={filters.page >= totalPages || expensesLoading}
               onClick={() => setFilters((prev) => ({ ...prev, page: prev.page + 1 }))}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900"
-            >
+              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none">
               Next
             </button>
           </div>
@@ -485,53 +321,28 @@ export default function ExpensesPage() {
 
       {/* Expense form modal */}
       {showForm && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={editingExpense ? 'Edit expense' : 'Add expense'}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-        >
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={closeForm}
-            aria-hidden="true"
-          />
-          {/* Panel — bottom sheet on mobile, centered modal on sm+ */}
-          <div className="relative z-10 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl bg-white shadow-xl flex flex-col max-h-[92dvh] sm:max-h-[90vh]">
-            {/* Drag handle (mobile only) */}
+        <div role="dialog" aria-modal="true" aria-label={editingExpense ? 'Edit expense' : 'Add expense'}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={closeForm} aria-hidden="true" />
+          <div className="relative z-10 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/70 dark:border-white/[0.08] shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top,16px))] sm:max-h-[85vh]">
             <div className="flex justify-center pt-3 pb-1 sm:hidden" aria-hidden="true">
-              <div className="h-1 w-10 rounded-full bg-gray-300" />
+              <div className="h-1 w-10 rounded-full bg-black/10 dark:bg-white/10" />
             </div>
-            {/* Header */}
-            <div className="px-6 pt-4 pb-2 sm:pt-6">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {editingExpense ? 'Edit expense' : 'Add expense'}
-              </h2>
+            <div className="px-6 pt-4 pb-3 sm:pt-6 border-b border-black/[0.06] dark:border-white/[0.06]">
+              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">{editingExpense ? 'Edit expense' : 'Add expense'}</h2>
             </div>
-            {/* Scrollable form body */}
-            <div className="overflow-y-auto px-6 pb-6">
-              <ExpenseForm
-                expense={editingExpense}
-                onSuccess={closeForm}
-                onCancel={closeForm}
-              />
+            <div className="overflow-y-auto flex-1 min-h-0 px-6 pb-6 pt-4">
+              <ExpenseForm expense={editingExpense} onSuccess={closeForm} onCancel={closeForm} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
       {deletingExpense && (
-        <DeleteDialog
-          expense={deletingExpense}
-          onCancel={closeDelete}
+        <DeleteDialog expense={deletingExpense} onCancel={closeDelete}
           onConfirm={() => deleteMutation.mutate(deletingExpense.id)}
-          isPending={deleteMutation.isPending}
-          error={deleteError}
-        />
+          isPending={deleteMutation.isPending} error={deleteError} />
       )}
     </div>
   );
 }
-

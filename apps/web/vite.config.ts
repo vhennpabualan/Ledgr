@@ -42,11 +42,23 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^\/api\/.*/i,
-            handler: 'NetworkFirst',
+            // GET API calls — serve cache instantly, revalidate in background
+            urlPattern: /^https?:\/\/.*\/api\/.*/i,
+            handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
+              cacheName: 'api-get-cache',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }, // 24h
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Fallback for same-origin /api (dev proxy)
+            urlPattern: /^\/api\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'api-get-cache-local',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
         ],
@@ -82,7 +94,6 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },

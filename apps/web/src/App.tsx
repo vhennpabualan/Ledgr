@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './layouts/AppLayout';
 import LoginPage from './pages/LoginPage';
@@ -9,17 +10,20 @@ import ExpensesPage from './pages/ExpensesPage';
 import CategoriesPage from './pages/CategoriesPage';
 import BudgetsPage from './pages/BudgetsPage';
 import ReportsPage from './pages/ReportsPage';
+import SettingsPage from './pages/SettingsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      // Keep data fresh for 5 minutes — reduces re-fetches on navigation
-      staleTime: 5 * 60 * 1000,
-      // Keep unused cache in memory for 10 minutes — instant back-navigation
-      gcTime: 10 * 60 * 1000,
-      // Don't re-fetch when window regains focus (alt-tab back)
+      // Data stays fresh for 3 minutes — no refetch on navigation within this window
+      staleTime: 3 * 60 * 1000,
+      // Keep unused cache for 15 minutes — instant back-navigation
+      gcTime: 15 * 60 * 1000,
+      // Don't re-fetch when window regains focus
       refetchOnWindowFocus: false,
+      // Don't refetch on reconnect unless data is stale
+      refetchOnReconnect: 'always',
     },
   },
 });
@@ -28,24 +32,22 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<LoginPage />} />
-
-          {/* Protected — all wrapped in AppLayout */}
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/expenses" element={<ExpensesPage />} />
-              <Route path="/budgets" element={<BudgetsPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/categories" element={<CategoriesPage />} />
+        <SettingsProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/expenses" element={<ExpensesPage />} />
+                <Route path="/budgets" element={<BudgetsPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/categories" element={<CategoriesPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
             </Route>
-          </Route>
-
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </SettingsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

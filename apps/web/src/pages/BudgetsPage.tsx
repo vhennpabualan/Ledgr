@@ -11,7 +11,6 @@ function formatMonthYear(year: number, month: number): string { return `${MONTH_
 function extractError(err: unknown): string { return err instanceof Error ? err.message : 'Something went wrong.'; }
 
 const glass = 'rounded-2xl border border-white/70 bg-white/50 backdrop-blur-md shadow-sm shadow-black/[0.06] dark:border-white/[0.08] dark:bg-white/[0.04]';
-const glassInput = 'w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors placeholder:text-gray-400';
 
 // ─── Budget card ──────────────────────────────────────────────────────────────
 

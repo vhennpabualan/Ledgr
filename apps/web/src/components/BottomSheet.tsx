@@ -1,4 +1,5 @@
 import { useEffect, useRef, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface BottomSheetProps {
   open: boolean;
@@ -62,7 +63,7 @@ export default function BottomSheet({ open, onClose, title, children, ariaLabel 
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -99,7 +100,7 @@ export default function BottomSheet({ open, onClose, title, children, ariaLabel 
           <button
             type="button"
             onClick={onClose}
-            className="sm:hidden rounded-xl p-1.5 text-gray-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] transition-colors focus:outline-none"
+            className="rounded-xl p-1.5 text-gray-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] transition-colors focus:outline-none"
             aria-label="Close"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -113,6 +114,7 @@ export default function BottomSheet({ open, onClose, title, children, ariaLabel 
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

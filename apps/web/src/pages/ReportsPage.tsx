@@ -7,12 +7,10 @@ import {
 import { reportsApi } from '../lib/api';
 import type { ReportSummary, TrendPoint } from '@ledgr/types';
 import DatePicker, { todayISO } from '../components/DatePicker';
+import { useSettings } from '../contexts/SettingsContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatPHP(minorUnits: number): string {
-  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minorUnits / 100);
-}
 function today(): string { return todayISO(); }
 function firstOfMonth(): string {
   const d = new Date();
@@ -79,26 +77,26 @@ function SegmentControl<T extends string>({
 
 // ─── Tooltips ─────────────────────────────────────────────────────────────────
 
-function PieTooltipContent({ active, payload, isDark }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { percentage: number } }>; isDark?: boolean }) {
+function PieTooltipContent({ active, payload, isDark, formatMoney }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { percentage: number } }>; isDark?: boolean; formatMoney: (n: number) => string }) {
   if (!active || !payload?.length) return null;
   const { name, value, payload: extra } = payload[0];
   const style = getTooltipStyle(isDark ?? false);
   return (
     <div style={style} className="px-3 py-2 text-sm">
       <p className="font-medium text-gray-800 dark:text-gray-100">{name}</p>
-      <p className="text-gray-600 dark:text-gray-300">{formatPHP(value)}</p>
+      <p className="text-gray-600 dark:text-gray-300">{formatMoney(value)}</p>
       <p className="text-gray-400 dark:text-gray-500">{extra.percentage.toFixed(1)}%</p>
     </div>
   );
 }
 
-function LineTooltipContent({ active, payload, label, isDark }: { active?: boolean; payload?: Array<{ value: number }>; label?: string; isDark?: boolean }) {
+function LineTooltipContent({ active, payload, label, isDark, formatMoney }: { active?: boolean; payload?: Array<{ value: number }>; label?: string; isDark?: boolean; formatMoney: (n: number) => string }) {
   if (!active || !payload?.length) return null;
   const style = getTooltipStyle(isDark ?? false);
   return (
     <div style={style} className="px-3 py-2 text-sm">
       <p className="font-medium text-gray-800 dark:text-gray-100">{label}</p>
-      <p className="text-gray-600 dark:text-gray-300">{formatPHP(payload[0].value * 100)}</p>
+      <p className="text-gray-600 dark:text-gray-300">{formatMoney(payload[0].value * 100)}</p>
     </div>
   );
 }
@@ -110,6 +108,7 @@ function ChartSkeleton({ height = 240 }: { height?: number }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
+  const { formatMoney } = useSettings();
   const [from, setFrom] = useState<string>(firstOfMonth);
   const [to, setTo] = useState<string>(today);
   const [groupBy, setGroupBy] = useState<GroupBy>('category');
@@ -209,7 +208,7 @@ export default function ReportsPage() {
               <div className="space-y-5">
                 <div>
                   <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Total spent</p>
-                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatPHP(summary!.totalSpent)}</p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{formatMoney(summary!.totalSpent)}</p>
                 </div>
 
                 {summary!.breakdown.length > 0 && (
@@ -228,7 +227,7 @@ export default function ReportsPage() {
                                 <span className="truncate">{b.categoryName}</span>
                               </span>
                               <span className="tabular-nums text-gray-800 dark:text-gray-100 font-medium shrink-0">
-                                {formatPHP(b.totalSpent)}
+                                {formatMoney(b.totalSpent)}
                                 <span className="ml-1.5 text-gray-400 dark:text-gray-500 font-normal text-xs">({b.percentage.toFixed(1)}%)</span>
                               </span>
                             </div>
@@ -264,7 +263,7 @@ export default function ReportsPage() {
                           <Cell key={`cell-${index}`} fill={SLICE_COLORS[index % SLICE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip content={<PieTooltipContent isDark={isDark} />} />
+                      <Tooltip content={<PieTooltipContent isDark={isDark} formatMoney={formatMoney} />} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -290,7 +289,7 @@ export default function ReportsPage() {
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false}
                         tickFormatter={(v: number) => `₱${v.toLocaleString()}`} />
-                      <Tooltip content={<LineTooltipContent isDark={isDark} />} />
+                      <Tooltip content={<LineTooltipContent isDark={isDark} formatMoney={formatMoney} />} />
                       <Line type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={2}
                         dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
                     </LineChart>

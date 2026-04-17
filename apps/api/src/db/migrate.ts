@@ -16,6 +16,7 @@ const MIGRATIONS = [
   '003_income.sql',
   '004_pending_spend.sql',
   '005_pending_items.sql',
+  '006_income_multi_entry.sql',
 ];
 
 async function migrate(): Promise<void> {

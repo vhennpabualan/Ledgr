@@ -51,6 +51,8 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [receiptDeleted, setReceiptDeleted] = useState(false);
   const [deletingReceipt, setDeletingReceipt] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanApplied, setScanApplied] = useState(false);
 
   // Re-populate when expense prop changes (e.g. switching between edit targets)
   useEffect(() => {
@@ -385,9 +387,52 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
             const file = e.target.files?.[0] ?? null;
             setForm((prev) => ({ ...prev, receiptFile: file }));
             if (errors.receipt) setErrors((prev) => ({ ...prev, receipt: undefined }));
+
+            // Auto-scan if it's an image (PDFs can't be vision-scanned)
+            if (file && file.type.startsWith('image/')) {
+              setScanApplied(false);
+              setScanning(true);
+              expensesApi.scanReceipt(file)
+                .then(({ data }) => {
+                  // Only pre-fill fields that are currently empty to avoid overwriting user input
+                  setForm((prev) => ({
+                    ...prev,
+                    amount: prev.amount || (data.amount != null ? String(data.amount / 100) : prev.amount),
+                    date: prev.date === todayISO() && data.date ? data.date : prev.date,
+                    description: prev.description || (data.description ?? prev.description),
+                    currency: data.currency ?? prev.currency,
+                  }));
+                  if (data.amount != null || data.date || data.description) {
+                    setScanApplied(true);
+                  }
+                })
+                .catch(() => {
+                  // Scan failed silently — user can fill in manually
+                })
+                .finally(() => setScanning(false));
+            }
           }}
           className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 dark:file:bg-white/[0.08] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 dark:file:text-gray-200 hover:file:bg-gray-200 dark:hover:file:bg-white/[0.12] transition-colors cursor-pointer"
         />
+
+        {scanning && (
+          <div className="mt-2 flex items-center gap-2 rounded-xl border border-indigo-200/60 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2">
+            <svg className="h-3.5 w-3.5 animate-spin text-indigo-500 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+            <p className="text-xs text-indigo-600 dark:text-indigo-400">Reading receipt…</p>
+          </div>
+        )}
+
+        {scanApplied && !scanning && (
+          <div className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-200/60 bg-emerald-50/60 dark:bg-emerald-900/20 px-3 py-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-emerald-500 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">Receipt scanned — fields pre-filled. Review before saving.</p>
+          </div>
+        )}
 
         {uploadingReceipt && (
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 animate-pulse">Uploading receipt…</p>

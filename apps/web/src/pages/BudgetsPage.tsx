@@ -3,10 +3,8 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { budgetsApi, categoriesApi } from '../lib/api';
 import type { Budget, BudgetStatus, Category, CreateBudgetDTO, PendingSpend } from '@ledgr/types';
 import BottomSheet from '../components/BottomSheet';
+import { useSettings } from '../contexts/SettingsContext';
 
-function formatPHP(minorUnits: number): string {
-  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minorUnits / 100);
-}
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 function formatMonthYear(year: number, month: number): string { return `${MONTH_NAMES[month - 1]} ${year}`; }
 function extractError(err: unknown): string { return err instanceof Error ? err.message : 'Something went wrong.'; }
@@ -24,6 +22,7 @@ interface BudgetCardProps {
 
 function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps) {
   const queryClient = useQueryClient();
+  const { formatMoney, budgetAlertThreshold } = useSettings();
   const [showPending, setShowPending] = useState(false);
   const [pendingLabel, setPendingLabel] = useState('');
   const [pendingAmount, setPendingAmount] = useState('');
@@ -70,11 +69,14 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
   const spentPct = status ? Math.min((status.spent / budget.limitAmount) * 100, 100) : 0;
   const pendingPct = status ? Math.min((status.pending / budget.limitAmount) * 100, 100 - spentPct) : 0;
   const isOver = status?.isOverBudget ?? false;
+  const isWarning = !isOver && spentPct >= budgetAlertThreshold;
   const pendingCount = pendingItems.length;
 
-  // Card left-border accent + bg tint for over-budget
+  // Card left-border accent + bg tint for over-budget or warning
   const cardAccent = isOver
-    ? 'border-l-4 border-l-red-400 bg-red-50/40'
+    ? 'border-l-4 border-l-red-400 bg-red-50/40 dark:bg-red-900/10'
+    : isWarning
+    ? 'border-l-4 border-l-amber-400 bg-amber-50/30 dark:bg-amber-900/10'
     : 'border-l-4 border-l-transparent';
 
   return (
@@ -136,6 +138,18 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
         <p role="alert" className="text-xs text-red-500 dark:text-red-400 bg-red-50/60 dark:bg-red-900/20 border border-red-200/60 rounded-xl px-3 py-2">{deleteError}</p>
       )}
 
+      {/* Budget alert threshold warning */}
+      {isWarning && status && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200/60 bg-amber-50/60 dark:bg-amber-900/20 px-3 py-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 text-amber-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            {spentPct.toFixed(0)}% of budget used — {budgetAlertThreshold}% alert threshold reached
+          </p>
+        </div>
+      )}
+
       {/* Amounts */}
       {statusLoading ? (
         <div className="space-y-2" aria-hidden="true">
@@ -148,20 +162,20 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
           {/* Limit prominent, spent/remaining below */}
           <div>
             <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">Limit</p>
-            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatPHP(budget.limitAmount)}</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatMoney(budget.limitAmount)}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.03] px-3 py-2">
               <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">Spent</p>
               <p className={`text-sm font-semibold tabular-nums ${isOver ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>
-                {formatPHP(status.spent)}
+                {formatMoney(status.spent)}
               </p>
             </div>
             <div className={`rounded-xl px-3 py-2 ${status.remaining < 0 ? 'bg-red-50/60 dark:bg-red-900/20' : 'bg-emerald-50/60 dark:bg-emerald-900/20'}`}>
               <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">Remaining</p>
               <p className={`text-sm font-semibold tabular-nums ${status.remaining < 0 ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {formatPHP(status.remaining)}
+                {formatMoney(status.remaining)}
               </p>
             </div>
           </div>
@@ -169,14 +183,14 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
           {status.pending > 0 && (
             <div className="flex items-center justify-between rounded-xl border border-amber-200/60 bg-amber-50/50 dark:bg-amber-900/20 px-3 py-2">
               <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending reserved</p>
-              <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{formatPHP(status.pending)}</p>
+              <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{formatMoney(status.pending)}</p>
             </div>
           )}
 
           {/* Stacked progress bar — indigo for spent, amber for pending */}
           <div>
             <div className="h-1.5 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.06] overflow-hidden flex">
-              <div className={`h-full transition-all duration-500 ${isOver ? 'bg-red-400' : 'bg-indigo-500'}`}
+              <div className={`h-full transition-all duration-500 ${isOver ? 'bg-red-400' : isWarning ? 'bg-amber-400' : 'bg-indigo-500'}`}
                 style={{ width: `${spentPct}%` }} aria-hidden="true" />
               <div className="h-full bg-amber-400 transition-all duration-500"
                 style={{ width: `${pendingPct}%` }} aria-hidden="true" />
@@ -207,7 +221,7 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
                 <li key={item.id} className="flex items-center justify-between gap-2 rounded-xl bg-amber-50/60 dark:bg-amber-900/20 border border-amber-200/50 px-3 py-1.5 text-xs">
                   <span className="text-gray-700 dark:text-gray-200 truncate">{item.label}</span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{formatPHP(item.amount)}</span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{formatMoney(item.amount)}</span>
                     <button type="button" onClick={() => removePendingMutation.mutate(item.id)}
                       disabled={removePendingMutation.isPending}
                       className="text-gray-300 hover:text-red-400 transition-colors focus:outline-none" aria-label={`Remove ${item.label}`}>

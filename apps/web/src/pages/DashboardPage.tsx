@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { reportsApi, expensesApi, budgetsApi, incomeApi, categoriesApi, pendingItemsApi } from '../lib/api';
-import type { ReportSummary, TrendPoint, Expense, BalanceSummary, Category, PendingItem } from '@ledgr/types';
+import { reportsApi, expensesApi, budgetsApi, incomeApi, categoriesApi } from '../lib/api';
+import type { ReportSummary, TrendPoint, Expense, BalanceSummary, Category, Budget, BudgetStatus, Income } from '@ledgr/types';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { todayISO } from '../components/DatePicker';
-import BottomSheet from '../components/BottomSheet';
+import { Link } from 'react-router-dom';
+import { useSettings } from '../contexts/SettingsContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatPHP(minor: number) {
-  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minor / 100);
-}
 function today() { return todayISO(); }
 function firstOfMonth() {
   const d = new Date();
@@ -26,6 +25,13 @@ function monthLabel(iso: string) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 }
+function daysInCurrentMonth(): number {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+}
+function dayOfMonth(): number {
+  return new Date().getDate();
+}
 
 // ─── Shared glass card class ──────────────────────────────────────────────────
 
@@ -37,60 +43,227 @@ function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-xl bg-black/[0.06] dark:bg-white/[0.06] ${className}`} />;
 }
 
-// ─── Income modal ─────────────────────────────────────────────────────────────
+// ─── Income manager modal ─────────────────────────────────────────────────────
 
-interface IncomeModalProps { year: number; month: number; current?: number; onClose: () => void; }
+interface IncomeModalProps { year: number; month: number; onClose: () => void; }
 
-function IncomeModal({ year, month, current, onClose }: IncomeModalProps) {
+function IncomeModal({ year, month, onClose }: IncomeModalProps) {
   const queryClient = useQueryClient();
-  const [value, setValue] = useState(current ? String(current / 100) : '');
-  const [label, setLabel] = useState('Salary');
+  const { formatMoney } = useSettings();
+  const [label, setLabel] = useState('');
+  const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editAmount, setEditAmount] = useState('');
 
-  const mutation = useMutation({
-    mutationFn: () => incomeApi.upsert({ amount: Math.round(parseFloat(value) * 100), year, month, label }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['dashboard-balance'] }); onClose(); },
-    onError: () => setError('Failed to save income.'),
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  // Lock body scroll
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['dashboard-balance'] });
+
+  const { data: entries = [], isLoading } = useQuery<Income[]>({
+    queryKey: ['income-entries', year, month],
+    queryFn: () => incomeApi.listEntries(year, month).then((r) => r.data),
   });
 
-  function handleSubmit(e: React.FormEvent) {
+  const addMutation = useMutation({
+    mutationFn: () => incomeApi.addEntry({
+      amount: Math.round(parseFloat(amount) * 100),
+      year, month,
+      label: label.trim() || 'Income',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-entries', year, month] });
+      invalidate();
+      setLabel(''); setAmount(''); setError('');
+    },
+    onError: () => setError('Failed to add entry.'),
+  });
+
+  const patchMutation = useMutation({
+    mutationFn: ({ id }: { id: string }) => incomeApi.patchEntry(id, {
+      amount: Math.round(parseFloat(editAmount) * 100),
+      label: editLabel.trim() || 'Income',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-entries', year, month] });
+      invalidate();
+      setEditingId(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => incomeApi.deleteEntry(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-entries', year, month] });
+      invalidate();
+    },
+  });
+
+  function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    const num = parseFloat(value);
-    if (!value || isNaN(num) || num <= 0) { setError('Enter a valid amount.'); return; }
+    const num = parseFloat(amount);
+    if (!amount || isNaN(num) || num <= 0) { setError('Enter a valid amount.'); return; }
     setError('');
-    mutation.mutate();
+    addMutation.mutate();
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm px-4" role="dialog" aria-modal="true">
-      <div className={`w-full max-w-sm rounded-2xl border border-white/70 dark:border-white/[0.10] bg-white dark:bg-[#1a1a2e] shadow-xl p-6 max-h-[90dvh] overflow-y-auto`}>
-        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-4">Set monthly income</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+  function startEdit(entry: Income) {
+    setEditingId(entry.id);
+    setEditLabel(entry.label);
+    setEditAmount(String(entry.amount / 100));
+  }
+
+  const totalIncome = entries.reduce((s, e) => s + e.amount, 0);
+
+  const inputCls = 'w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors';
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-labelledby="income-modal-title">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+
+      {/* Panel */}
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/70 dark:border-white/[0.10] bg-white dark:bg-[#1a1a2e] shadow-2xl flex flex-col max-h-[85dvh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-black/[0.06] dark:border-white/[0.06]">
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Label</label>
-            <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={100}
-              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <h2 id="income-modal-title" className="text-base font-semibold text-gray-800 dark:text-gray-100">Income sources</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+              {entries.length > 0 ? `Total: ${formatMoney(totalIncome)}` : 'Add your income sources for this month'}
+            </p>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Amount (₱)</label>
-            <input type="number" inputMode="decimal" step="0.01" min="0.01" placeholder="0.00"
-              value={value} onChange={(e) => { setValue(e.target.value); setError(''); }}
-              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" autoFocus />
-          </div>
-          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
-          <div className="flex gap-3 justify-end pt-1">
-            <button type="button" onClick={onClose}
-              className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={mutation.isPending}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
-              {mutation.isPending ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </form>
+          <button type="button" onClick={onClose} className="rounded-xl p-1.5 text-gray-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] transition-colors focus:outline-none" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Entry list */}
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => <div key={i} className="h-12 rounded-xl bg-black/[0.05] dark:bg-white/[0.05] animate-pulse" />)}
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">No income entries yet.</p>
+          ) : entries.map((entry) => (
+            editingId === entry.id ? (
+              /* Inline edit row */
+              <div key={entry.id} className="flex items-center gap-2 rounded-xl border border-indigo-300/60 dark:border-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-900/20 px-3 py-2">
+                <input
+                  type="text"
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  maxLength={100}
+                  className="flex-1 min-w-0 rounded-lg border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/[0.08] dark:text-gray-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="Label"
+                />
+                <input
+                  type="number"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  min="0.01"
+                  step="0.01"
+                  className="w-24 rounded-lg border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/[0.08] dark:text-gray-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="0.00"
+                />
+                <button
+                  type="button"
+                  onClick={() => patchMutation.mutate({ id: entry.id })}
+                  disabled={patchMutation.isPending}
+                  className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus:outline-none"
+                >
+                  {patchMutation.isPending ? '…' : 'Save'}
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none focus:outline-none">×</button>
+              </div>
+            ) : (
+              /* Display row */
+              <div key={entry.id} className="flex items-center gap-3 rounded-xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02] px-3 py-2.5 group">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{entry.label}</p>
+                </div>
+                <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">{formatMoney(entry.amount)}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(entry)}
+                    className="rounded-lg p-1 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50/80 dark:hover:bg-indigo-900/20 transition-colors focus:outline-none"
+                    aria-label={`Edit ${entry.label}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteMutation.mutate(entry.id)}
+                    disabled={deleteMutation.isPending}
+                    className="rounded-lg p-1 text-gray-400 hover:text-red-500 hover:bg-red-50/80 dark:hover:bg-red-900/20 transition-colors focus:outline-none"
+                    aria-label={`Delete ${entry.label}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )
+          ))}
+        </div>
+
+        {/* Add entry form */}
+        <div className="px-6 pb-6 pt-3 border-t border-black/[0.06] dark:border-white/[0.06]">
+          <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">Add entry</p>
+          <form onSubmit={handleAdd} className="space-y-2">
+            <input
+              type="text"
+              placeholder="Label (e.g. Salary, Freelance)"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              maxLength={100}
+              className={inputCls}
+            />
+            <div className="flex gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); setError(''); }}
+                className={`${inputCls} flex-1`}
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={addMutation.isPending}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20 shrink-0"
+              >
+                {addMutation.isPending ? '…' : 'Add'}
+              </button>
+            </div>
+            {error && <p role="alert" className="text-xs text-red-500 dark:text-red-400">{error}</p>}
+          </form>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -111,9 +284,11 @@ function EyeIcon({ hidden }: { hidden: boolean }) {
 }
 
 function BalanceCard({ balance, onEdit }: { balance: BalanceSummary; onEdit: () => void }) {
-  const { income, totalSpent, remaining, remainingAfterPending, pendingTotal, percentSpent } = balance;
+  const { income, totalIncome, entries, totalSpent, remaining, remainingAfterPending, pendingTotal, percentSpent } = balance;
+  const { formatMoney } = useSettings();
   const [hidden, setHidden] = useState(false);
   const pct = Math.min(percentSpent, 100);
+  const hasIncome = totalIncome > 0;
   const isOver = remaining < 0;
   const isOverAfterPending = remainingAfterPending < 0;
   const barColor = isOver ? 'bg-red-400' : percentSpent >= 80 ? 'bg-amber-400' : 'bg-emerald-400';
@@ -134,28 +309,30 @@ function BalanceCard({ balance, onEdit }: { balance: BalanceSummary; onEdit: () 
             >
               <EyeIcon hidden={hidden} />
             </button>
-            <button onClick={onEdit}
-              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors">
-              {income ? 'Edit' : 'Set income'}
+            <button
+              onClick={onEdit}
+              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
+            >
+              {hasIncome ? `${entries.length} source${entries.length !== 1 ? 's' : ''}` : 'Add income'}
             </button>
           </div>
         </div>
         <p className={`text-4xl font-bold mt-1 ${isOver ? 'text-red-500 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}`}>
-          {income
-            ? (hidden ? mask : (isOver ? `-${formatPHP(Math.abs(remaining))}` : formatPHP(remaining)))
+          {hasIncome
+            ? (hidden ? mask : (isOver ? `-${formatMoney(Math.abs(remaining))}` : formatMoney(remaining)))
             : '—'}
         </p>
-        {income && !hidden && pendingTotal > 0 && (
+        {hasIncome && !hidden && pendingTotal > 0 && (
           <p className={`text-sm mt-0.5 font-medium ${isOverAfterPending ? 'text-red-400' : 'text-amber-500'}`}>
-            {isOverAfterPending ? `-${formatPHP(Math.abs(remainingAfterPending))}` : formatPHP(remainingAfterPending)} after pending
+            {isOverAfterPending ? `-${formatMoney(Math.abs(remainingAfterPending))}` : formatMoney(remainingAfterPending)} after pending
           </p>
         )}
-        {income && hidden && pendingTotal > 0 && (
+        {hasIncome && hidden && pendingTotal > 0 && (
           <p className="text-sm mt-0.5 font-medium text-amber-500">{mask} after pending</p>
         )}
       </div>
 
-      {income ? (
+      {hasIncome ? (
         <>
           {/* Progress bar */}
           <div className="mb-4">
@@ -168,20 +345,22 @@ function BalanceCard({ balance, onEdit }: { balance: BalanceSummary; onEdit: () 
             </div>
           </div>
 
-          {/* Secondary row: salary + spent */}
+          {/* Income sources breakdown (up to 3, then summarised) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-black/[0.04] dark:bg-white/[0.04] p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{income.label ?? 'Salary'}</p>
-              <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{hidden ? mask : formatPHP(income.amount)}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+                {entries.length === 1 ? (income?.label ?? 'Income') : `Income (${entries.length} sources)`}
+              </p>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{hidden ? mask : formatMoney(totalIncome)}</p>
             </div>
             <div className="rounded-xl bg-black/[0.04] dark:bg-white/[0.04] p-3">
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Spent</p>
-              <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{hidden ? mask : formatPHP(totalSpent)}</p>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{hidden ? mask : formatMoney(totalSpent)}</p>
             </div>
           </div>
         </>
       ) : (
-        <p className="text-sm text-gray-400 dark:text-gray-500">Set your income to track your monthly balance.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500">Add your income sources to track your monthly balance.</p>
       )}
     </div>
   );
@@ -202,6 +381,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 // ─── Recent expense row ───────────────────────────────────────────────────────
 
 function RecentRow({ expense }: { expense: Expense }) {
+  const { formatMoney } = useSettings();
   const date = new Date(expense.date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-black/[0.05] dark:border-white/[0.05] last:border-0">
@@ -209,143 +389,128 @@ function RecentRow({ expense }: { expense: Expense }) {
         <p className="truncate text-sm font-medium text-gray-700 dark:text-gray-200">{expense.description ?? 'No description'}</p>
         <p className="text-xs text-gray-400 dark:text-gray-500">{date}</p>
       </div>
-      <span className="ml-4 shrink-0 text-sm font-semibold text-gray-800 dark:text-gray-100">{formatPHP(expense.amount)}</span>
+      <span className="ml-4 shrink-0 text-sm font-semibold text-gray-800 dark:text-gray-100">{formatMoney(expense.amount)}</span>
     </div>
   );
 }
 
-// ─── Pending items card ───────────────────────────────────────────────────────
+// ─── Dashboard budget row (with live progress bar + alert) ───────────────────
 
-function PendingItemsCard({ year, month, categories }: { year: number; month: number; categories: Category[] }) {
-  const queryClient = useQueryClient();
-  const categoryMap = new Map(categories.map((c) => [c.id, c]));
-  const [label, setLabel] = useState('');
-  const [amount, setAmount] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [catOpen, setCatOpen] = useState(false);
-  const [deliveringId, setDeliveringId] = useState<string | null>(null);
-
-  const { data: items = [], isLoading } = useQuery<PendingItem[]>({
-    queryKey: ['pending-items', year, month],
-    queryFn: () => pendingItemsApi.list(year, month).then((r) => r.data),
+function DashboardBudgetRow({ budget, category }: { budget: Budget; category: Category | undefined }) {
+  const { formatMoney, budgetAlertThreshold } = useSettings();
+  const { data: status } = useQuery<BudgetStatus>({
+    queryKey: ['budget-status', budget.id],
+    queryFn: () => budgetsApi.getStatus(budget.id).then((r) => r.data),
+    staleTime: 3 * 60 * 1000,
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['pending-items', year, month] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard-balance', year, month] });
-  };
-
-  const addMutation = useMutation({
-    mutationFn: () => pendingItemsApi.create({ label: label.trim(), amount: Math.round(parseFloat(amount) * 100), currency: 'PHP', categoryId: categoryId || undefined, year, month }),
-    onSuccess: () => { setLabel(''); setAmount(''); setCategoryId(''); setFormError(null); invalidate(); },
-    onError: () => setFormError('Failed to add item.'),
-  });
-
-  const deleteMutation = useMutation({ mutationFn: (id: string) => pendingItemsApi.delete(id), onSuccess: invalidate });
-
-  const deliverMutation = useMutation({
-    mutationFn: (id: string) => pendingItemsApi.deliver(id),
-    onSuccess: () => { setDeliveringId(null); invalidate(); queryClient.invalidateQueries({ queryKey: ['expenses'] }); },
-    onError: () => setDeliveringId(null),
-  });
-
-  function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!label.trim()) return setFormError('Label is required.');
-    const amt = parseFloat(amount);
-    if (isNaN(amt) || amt <= 0) return setFormError('Enter a valid amount.');
-    addMutation.mutate();
-  }
-
-  const totalPending = items.reduce((s, i) => s + i.amount, 0);
+  const spentPct = status ? Math.min((status.spent / budget.limitAmount) * 100, 100) : 0;
+  const pendingPct = status ? Math.min((status.pending / budget.limitAmount) * 100, 100 - spentPct) : 0;
+  const isOver = status?.isOverBudget ?? false;
+  const isWarning = !isOver && spentPct >= budgetAlertThreshold;
+  const barColor = isOver ? 'bg-red-400' : isWarning ? 'bg-amber-400' : 'bg-indigo-500';
 
   return (
-    <div className={`${glass} p-5`}>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Upcoming expenses</h2>
-          {items.length > 0 && <p className="text-xs text-amber-500 font-medium mt-0.5">{formatPHP(totalPending)} pending</p>}
+    <div className="py-2.5 border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 space-y-1.5">
+      {/* Top row: category + amounts */}
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          {category && (
+            <span
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-xs"
+              style={{ backgroundColor: category.color + '22', color: category.color }}
+              aria-hidden="true"
+            >
+              {category.icon}
+            </span>
+          )}
+          <span className="font-medium text-gray-700 dark:text-gray-200 truncate">{category?.name ?? '—'}</span>
+          {isOver && <span className="shrink-0 text-[10px] font-bold text-red-500 dark:text-red-400">Over</span>}
+          {isWarning && <span className="shrink-0 text-[10px]" aria-label="Budget warning">⚠️</span>}
+        </div>
+        <div className="shrink-0 text-right">
+          {status ? (
+            <span className={`text-xs font-semibold tabular-nums ${isOver ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'}`}>
+              {formatMoney(status.spent)}
+              <span className="font-normal text-gray-400 dark:text-gray-500"> / {formatMoney(budget.limitAmount)}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400 dark:text-gray-500">{formatMoney(budget.limitAmount)}</span>
+          )}
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-2 mb-3">{[1,2].map((i) => <div key={i} className="h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.05] animate-pulse" />)}</div>
-      ) : items.length === 0 ? (
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">No upcoming expenses. Add one below.</p>
-      ) : (
-        <ul className="space-y-2 mb-3">
-          {items.map((item) => {
-            const cat = item.categoryId ? categoryMap.get(item.categoryId) : null;
-            const isDelivering = deliveringId === item.id && deliverMutation.isPending;
-            return (
-              <li key={item.id} className="flex items-center gap-2 rounded-xl border border-amber-200/60 bg-amber-50/60 dark:bg-amber-900/20 px-3 py-2">
-                {cat && <span className="text-base shrink-0" aria-hidden="true">{cat.icon}</span>}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{item.label}</p>
-                  {cat && <p className="text-xs text-gray-400 dark:text-gray-500">{cat.name}</p>}
-                </div>
-                <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums shrink-0">-{formatPHP(item.amount)}</span>
-                <button type="button" disabled={isDelivering || deliverMutation.isPending}
-                  onClick={() => { setDeliveringId(item.id); deliverMutation.mutate(item.id); }}
-                  className="shrink-0 rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors focus:outline-none">
-                  {isDelivering ? '…' : '✓ Delivered'}
-                </button>
-                <button type="button" onClick={() => deleteMutation.mutate(item.id)} disabled={deleteMutation.isPending}
-                  className="shrink-0 text-gray-300 hover:text-red-400 transition-colors focus:outline-none text-lg leading-none" aria-label={`Remove ${item.label}`}>
-                  ×
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <form onSubmit={handleAdd} className="space-y-2">
-        <input type="text" placeholder="Label (e.g. Shopee parcel)" value={label} maxLength={100}
-          onChange={(e) => { setLabel(e.target.value); setFormError(null); }}
-          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-        <div className="flex gap-2">
-          <input type="number" placeholder="Amount" value={amount} min="0.01" step="0.01"
-            onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
-            className="flex-1 rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-          <div className="flex-1">
-            <button type="button" onClick={() => setCatOpen(true)}
-              className="w-full flex items-center justify-between rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-amber-400">
-              <span className={categoryId ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}>
-                {categoryId ? `${categoryMap.get(categoryId)?.icon} ${categoryMap.get(categoryId)?.name}` : 'Category'}
-              </span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <BottomSheet open={catOpen} onClose={() => setCatOpen(false)} title="Select category">
-              <ul className="-mx-6 -mb-6">
-                <li
-                  onClick={() => { setCategoryId(''); setCatOpen(false); }}
-                  className={`flex items-center gap-3 px-6 py-3.5 text-sm cursor-pointer transition-colors border-b border-black/[0.05] dark:border-white/[0.05] ${categoryId === '' ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}
-                >
-                  None
-                </li>
-                {categories.filter((c) => !c.isArchived).map((c) => (
-                  <li key={c.id}
-                    onClick={() => { setCategoryId(c.id); setCatOpen(false); }}
-                    className={`flex items-center gap-3 px-6 py-3.5 text-sm cursor-pointer transition-colors border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 ${categoryId === c.id ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}
-                  >
-                    <span className="text-lg" aria-hidden="true">{c.icon}</span>
-                    {c.name}
-                  </li>
-                ))}
-              </ul>
-            </BottomSheet>
-          </div>
+      {/* Progress bar: indigo spent + amber pending */}
+      {status ? (
+        <div className="h-1.5 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.06] overflow-hidden flex">
+          <div className={`h-full transition-all duration-500 ${barColor}`} style={{ width: `${spentPct}%` }} aria-hidden="true" />
+          <div className="h-full bg-amber-300/70 transition-all duration-500" style={{ width: `${pendingPct}%` }} aria-hidden="true" />
         </div>
-        {formError && <p className="text-xs text-red-500 dark:text-red-400">{formError}</p>}
-        <button type="submit" disabled={addMutation.isPending}
-          className="w-full rounded-xl bg-amber-500 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400">
-          {addMutation.isPending ? 'Adding…' : '+ Add upcoming expense'}
-        </button>
-      </form>
+      ) : (
+        <div className="h-1.5 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.06] animate-pulse" />
+      )}
+    </div>
+  );
+}
+
+// ─── Spending forecast card ───────────────────────────────────────────────────
+
+function ForecastCard({ trend, income }: { trend: TrendPoint[] | undefined; income: number | null }) {
+  const { formatMoney } = useSettings();
+
+  if (!trend || trend.length === 0) return null;
+
+  const currentDay = dayOfMonth();
+  const totalDays = daysInCurrentMonth();
+  const daysLeft = totalDays - currentDay;
+
+  // Sum only days that have data (some days may be zero / missing)
+  const totalSpentSoFar = trend.reduce((sum, p) => sum + p.totalSpent, 0);
+  // Average per elapsed day (use currentDay as denominator — not just days with data)
+  const avgPerDay = currentDay > 0 ? totalSpentSoFar / currentDay : 0;
+  const projectedTotal = totalSpentSoFar + avgPerDay * daysLeft;
+
+  const overIncome = income !== null && projectedTotal > income;
+  const projectedOverBy = income !== null ? projectedTotal - income : 0;
+
+  // Only show if we have at least 3 days of data — earlier projections are too noisy
+  if (currentDay < 3) return null;
+
+  return (
+    <div className={`${glass} p-5`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Month-end forecast</h2>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            Based on your average of {formatMoney(Math.round(avgPerDay))}/day over {currentDay} days
+          </p>
+        </div>
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 bg-black/[0.04] dark:bg-white/[0.04] rounded-lg px-2 py-1">
+          {daysLeft}d left
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.03] p-3">
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">Spent so far</p>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 tabular-nums">{formatMoney(totalSpentSoFar)}</p>
+        </div>
+        <div className={`rounded-xl p-3 ${overIncome ? 'bg-red-50/60 dark:bg-red-900/20' : 'bg-indigo-50/60 dark:bg-indigo-900/20'}`}>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">Projected total</p>
+          <p className={`text-sm font-semibold tabular-nums ${overIncome ? 'text-red-500 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+            {formatMoney(Math.round(projectedTotal))}
+          </p>
+        </div>
+      </div>
+
+      {/* Insight line */}
+      {income !== null && (
+        <p className={`mt-3 text-xs font-medium ${overIncome ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+          {overIncome
+            ? `At this rate you'll exceed your income by ${formatMoney(Math.round(projectedOverBy))}.`
+            : `You're on track to stay ${formatMoney(Math.round(income - projectedTotal))} under your income.`}
+        </p>
+      )}
     </div>
   );
 }
@@ -354,6 +519,7 @@ function PendingItemsCard({ year, month, categories }: { year: number; month: nu
 
 export default function DashboardPage() {
   const { year, month } = currentYearMonth();
+  const { formatMoney } = useSettings();
   const from = firstOfMonth();
   const to = today();
   const [showIncomeModal, setShowIncomeModal] = useState(false);
@@ -400,7 +566,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       {showIncomeModal && (
-        <IncomeModal year={year} month={month} current={balance.data?.income?.amount} onClose={() => setShowIncomeModal(false)} />
+        <IncomeModal year={year} month={month} onClose={() => setShowIncomeModal(false)} />
       )}
 
       {/* Balance card */}
@@ -415,8 +581,8 @@ export default function DashboardPage() {
           : summary.isError
           ? <p className="col-span-3 text-sm text-red-500">Failed to load summary.</p>
           : <>
-              <StatCard label="Spent this month" value={formatPHP(summary.data!.totalSpent)} sub={`${summary.data!.breakdown.length} categories`} />
-              <StatCard label="Top category" value={topCategory?.categoryName ?? '—'} sub={topCategory ? formatPHP(topCategory.totalSpent) : undefined} />
+              <StatCard label="Spent this month" value={formatMoney(summary.data!.totalSpent)} sub={`${summary.data!.breakdown.length} categories`} />
+              <StatCard label="Top category" value={topCategory?.categoryName ?? '—'} sub={topCategory ? formatMoney(topCategory.totalSpent) : undefined} />
               <StatCard label="Active budgets" value={String(budgetCount)} sub={budgetCount > 0 ? 'this month' : 'none set'} />
             </>}
       </div>
@@ -441,7 +607,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="label" tickFormatter={monthLabel} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={(v) => `₱${(v / 100).toFixed(0)}`} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  formatter={(v: unknown) => [formatPHP(v as number), 'Spent']}
+                  formatter={(v: unknown) => [formatMoney(v as number), 'Spent']}
                   labelFormatter={(label: unknown) => monthLabel(label as string)}
                   contentStyle={{
                     fontSize: 12,
@@ -458,12 +624,18 @@ export default function DashboardPage() {
           )}
       </div>
 
+      {/* Spending forecast */}
+      <ForecastCard
+        trend={trend.isError ? undefined : trend.data}
+        income={balance.data?.totalIncome ?? null}
+      />
+
       {/* Recent + Budgets */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className={`${glass} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Recent expenses</h2>
-            <a href="/expenses" className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">View all</a>
+            <Link to="/expenses" className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">View all</Link>
           </div>
           {recent.isLoading
             ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
@@ -475,34 +647,18 @@ export default function DashboardPage() {
         <div className={`${glass} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Budgets</h2>
-            <a href="/budgets" className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">Manage</a>
+            <Link to="/budgets" className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">Manage</Link>
           </div>
           {budgets.isLoading
             ? <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
             : budgets.isError ? <p className="text-sm text-red-500 dark:text-red-400">Failed to load budgets.</p>
             : budgets.data!.length === 0 ? <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">No budgets set for this month.</p>
-            : budgets.data!.map((b) => {
-                const cat = categoryMap.get(b.categoryId);
-                return (
-                  <div key={b.id} className="flex items-center justify-between py-2.5 border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 text-sm gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {cat && (
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sm"
-                          style={{ backgroundColor: cat.color + '22', color: cat.color }} aria-hidden="true">
-                          {cat.icon}
-                        </span>
-                      )}
-                      <span className="text-gray-700 dark:text-gray-200 font-medium truncate">{cat?.name ?? b.categoryId}</span>
-                    </div>
-                    <span className="shrink-0 text-gray-500 dark:text-gray-400 tabular-nums">{formatPHP(b.limitAmount)}</span>
-                  </div>
-                );
-              })}
+            : budgets.data!.map((b) => (
+                <DashboardBudgetRow key={b.id} budget={b} category={categoryMap.get(b.categoryId)} />
+              ))}
         </div>
       </div>
 
-      {/* Upcoming / pending */}
-      <PendingItemsCard year={year} month={month} categories={categories.data ?? []} />
     </div>
   );
 }

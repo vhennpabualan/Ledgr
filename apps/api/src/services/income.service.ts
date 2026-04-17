@@ -1,5 +1,4 @@
 import { pool } from '../db/client.js';
-import { AppError } from '../lib/errors.js';
 import { sumPendingItems } from './pendingItems.service.js';
 import type { Income, UpsertIncomeDTO } from '@ledgr/types';
 
@@ -17,42 +16,65 @@ function rowToIncome(row: Record<string, unknown>): Income {
   };
 }
 
-/** Upsert income for a given month — one entry per user per month. */
-export async function upsertIncome(
+/** List all income entries for a given month, newest first. */
+export async function listIncome(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<Income[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM income
+     WHERE user_id = $1 AND year = $2 AND month = $3
+     ORDER BY created_at ASC`,
+    [userId, year, month],
+  );
+  return (rows as Record<string, unknown>[]).map(rowToIncome);
+}
+
+/** Add a new income entry for a month. */
+export async function addIncome(
   userId: string,
   dto: UpsertIncomeDTO,
 ): Promise<Income> {
   const { amount, currency, year, month, label } = dto;
-
   const { rows } = await pool.query(
     `INSERT INTO income (user_id, amount, currency, year, month, label)
      VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (user_id, year, month)
-     DO UPDATE SET
-       amount     = EXCLUDED.amount,
-       currency   = EXCLUDED.currency,
-       label      = EXCLUDED.label,
-       updated_at = NOW()
      RETURNING *`,
-    [userId, amount, currency ?? 'PHP', year, month, label ?? 'Salary'],
+    [userId, amount, currency ?? 'PHP', year, month, label ?? 'Income'],
   );
-
   return rowToIncome(rows[0] as Record<string, unknown>);
 }
 
-/** Get income for a specific month. Returns null if not set. */
-export async function getIncome(
+/** Update an existing income entry. */
+export async function updateIncome(
   userId: string,
-  year: number,
-  month: number,
+  id: string,
+  dto: Partial<UpsertIncomeDTO>,
 ): Promise<Income | null> {
   const { rows } = await pool.query(
-    `SELECT * FROM income WHERE user_id = $1 AND year = $2 AND month = $3`,
-    [userId, year, month],
+    `UPDATE income
+     SET amount = COALESCE($3, amount),
+         label  = COALESCE($4, label),
+         updated_at = NOW()
+     WHERE id = $1 AND user_id = $2
+     RETURNING *`,
+    [id, userId, dto.amount ?? null, dto.label ?? null],
   );
-
   if (rows.length === 0) return null;
   return rowToIncome(rows[0] as Record<string, unknown>);
+}
+
+/** Delete a single income entry. */
+export async function deleteIncome(
+  userId: string,
+  id: string,
+): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM income WHERE id = $1 AND user_id = $2`,
+    [id, userId],
+  );
+  return (rowCount ?? 0) > 0;
 }
 
 /** Get income + total spent for the month → balance summary. */
@@ -62,13 +84,19 @@ export async function getBalanceSummary(
   month: number,
 ): Promise<{
   income: Income | null;
+  totalIncome: number;
+  entries: Income[];
   totalSpent: number;
   pendingTotal: number;
   remaining: number;
   remainingAfterPending: number;
   percentSpent: number;
 }> {
-  const income = await getIncome(userId, year, month);
+  const entries = await listIncome(userId, year, month);
+  const totalIncome = entries.reduce((sum, e) => sum + e.amount, 0);
+
+  // Keep `income` as the first/primary entry for backward compat with BalanceSummary type
+  const income = entries[0] ?? null;
 
   const { rows } = await pool.query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) AS total
@@ -82,10 +110,37 @@ export async function getBalanceSummary(
 
   const totalSpent = Number(rows[0].total);
   const pendingTotal = await sumPendingItems(userId, year, month);
-  const incomeAmount = income?.amount ?? 0;
-  const remaining = incomeAmount - totalSpent;
+  const remaining = totalIncome - totalSpent;
   const remainingAfterPending = remaining - pendingTotal;
-  const percentSpent = incomeAmount > 0 ? (totalSpent / incomeAmount) * 100 : 0;
+  const percentSpent = totalIncome > 0 ? (totalSpent / totalIncome) * 100 : 0;
 
-  return { income, totalSpent, pendingTotal, remaining, remainingAfterPending, percentSpent };
+  return {
+    income,
+    totalIncome,
+    entries,
+    totalSpent,
+    pendingTotal,
+    remaining,
+    remainingAfterPending,
+    percentSpent,
+  };
+}
+
+// ─── Legacy upsert kept for any existing callers ──────────────────────────────
+/** @deprecated Use addIncome instead. Kept for backward compatibility. */
+export async function upsertIncome(
+  userId: string,
+  dto: UpsertIncomeDTO,
+): Promise<Income> {
+  return addIncome(userId, dto);
+}
+
+/** @deprecated Use listIncome instead. */
+export async function getIncome(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<Income | null> {
+  const entries = await listIncome(userId, year, month);
+  return entries[0] ?? null;
 }

@@ -10,6 +10,8 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
   R2_PUBLIC_URL: z.string().min(1),
+  // Optional — if not set, receipt scanning is disabled
+  GEMINI_API_KEY: z.string().optional(),
   PORT: z
     .string()
     .optional()

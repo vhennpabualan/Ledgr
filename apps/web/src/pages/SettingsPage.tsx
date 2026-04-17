@@ -37,14 +37,23 @@ function ChangePasswordSection() {
     <div className={`${glass} p-5`}>
       <h2 className={sectionTitle}>Change Password</h2>
       <form onSubmit={handleSubmit} className="space-y-3 max-w-sm">
-        <input type="password" placeholder="Current password" value={current}
-          onChange={(e) => setCurrent(e.target.value)} className={inputCls} autoComplete="current-password" />
-        <input type="password" placeholder="New password (min 8 chars)" value={next}
-          onChange={(e) => setNext(e.target.value)} className={inputCls} autoComplete="new-password" />
-        <input type="password" placeholder="Confirm new password" value={confirm}
-          onChange={(e) => setConfirm(e.target.value)} className={inputCls} autoComplete="new-password" />
-        {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
-        {success && <p className="text-xs text-emerald-600 dark:text-emerald-400">Password changed successfully.</p>}
+        <div>
+          <label htmlFor="cp-current" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current password</label>
+          <input id="cp-current" type="password" placeholder="Current password" value={current}
+            onChange={(e) => setCurrent(e.target.value)} className={inputCls} autoComplete="current-password" />
+        </div>
+        <div>
+          <label htmlFor="cp-new" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">New password</label>
+          <input id="cp-new" type="password" placeholder="Min 8 characters" value={next}
+            onChange={(e) => setNext(e.target.value)} className={inputCls} autoComplete="new-password" />
+        </div>
+        <div>
+          <label htmlFor="cp-confirm" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Confirm new password</label>
+          <input id="cp-confirm" type="password" placeholder="Confirm new password" value={confirm}
+            onChange={(e) => setConfirm(e.target.value)} className={inputCls} autoComplete="new-password" />
+        </div>
+        {error && <p className="text-xs text-red-500 dark:text-red-400" role="alert">{error}</p>}
+        {success && <p className="text-xs text-emerald-600 dark:text-emerald-400" role="status">Password changed successfully.</p>}
         <button type="submit" disabled={mutation.isPending || !current || !next || !confirm}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
           {mutation.isPending ? 'Saving…' : 'Update password'}

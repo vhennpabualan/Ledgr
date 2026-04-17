@@ -271,14 +271,27 @@ export interface UpsertIncomeDTO {
   label?: string;
 }
 
+/** DTO for adding a new income entry (replaces upsert for multi-entry flow) */
+export type AddIncomeDTO = UpsertIncomeDTO;
+
+/** DTO for patching an existing income entry */
+export interface PatchIncomeDTO {
+  amount?: number;
+  label?: string;
+}
+
 export interface BalanceSummary {
   income: Income | null;
+  /** Sum of all income entries this month */
+  totalIncome: number;
+  /** All income entries this month */
+  entries: Income[];
   totalSpent: number;
   /** Sum of all pending items this month */
   pendingTotal: number;
-  /** income - totalSpent */
+  /** totalIncome - totalSpent */
   remaining: number;
-  /** income - totalSpent - pendingTotal */
+  /** totalIncome - totalSpent - pendingTotal */
   remainingAfterPending: number;
   percentSpent: number;
 }

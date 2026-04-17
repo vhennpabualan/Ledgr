@@ -64,12 +64,9 @@ api.interceptors.response.use(
 
       try {
         const { data } = await axios.post<{ accessToken: string }>(
-          '/auth/refresh',
+          `${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/refresh`,
           {},
-          {
-            baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
-            withCredentials: true,
-          },
+          { withCredentials: true },
         );
 
         setApiToken(data.accessToken);
@@ -125,6 +122,21 @@ export const expensesApi = {
 
   deleteReceipt: (id: string) =>
     api.delete<Expense>(`/expenses/${id}/receipt`),
+
+  /** Send an image file to the backend for Gemini-powered receipt scanning. */
+  scanReceipt: (file: File) => {
+    const form = new FormData();
+    form.append('receipt', file);
+    return api.post<{
+      amount: number | null;
+      date: string | null;
+      description: string | null;
+      currency: string | null;
+      confidence: 'high' | 'low';
+    }>('/expenses/scan-receipt', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -184,14 +196,28 @@ export const reportsApi = {
 // ─── Income ───────────────────────────────────────────────────────────────────
 
 export const incomeApi = {
+  // Multi-entry (new)
+  listEntries: (year: number, month: number) =>
+    api.get<Income[]>('/income/entries', { params: { year, month } }),
+
+  addEntry: (data: UpsertIncomeDTO) =>
+    api.post<Income>('/income/entries', data),
+
+  patchEntry: (id: string, data: { amount?: number; label?: string }) =>
+    api.patch<Income>(`/income/entries/${id}`, data),
+
+  deleteEntry: (id: string) =>
+    api.delete(`/income/entries/${id}`),
+
+  getBalance: (year: number, month: number) =>
+    api.get<BalanceSummary>('/income/balance', { params: { year, month } }),
+
+  // Legacy (kept for any existing callers)
   upsert: (data: UpsertIncomeDTO) =>
     api.put<Income>('/income', data),
 
   get: (year: number, month: number) =>
     api.get<Income | null>('/income', { params: { year, month } }),
-
-  getBalance: (year: number, month: number) =>
-    api.get<BalanceSummary>('/income/balance', { params: { year, month } }),
 };
 
 export default api;

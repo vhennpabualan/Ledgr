@@ -1,16 +1,41 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { expensesApi, categoriesApi } from '../lib/api';
 import type { Expense, Category, PaginatedResult } from '@ledgr/types';
 import ExpenseForm from '../components/ExpenseForm';
 import DatePicker from '../components/DatePicker';
 import BottomSheet from '../components/BottomSheet';
+import { useSettings } from '../contexts/SettingsContext';
 
-function formatPHP(minorUnits: number): string {
-  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minorUnits / 100);
-}
 function formatDate(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** Returns "Today", "Yesterday", or a formatted date string */
+function dateGroupLabel(iso: string): string {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  if (iso === todayStr) return 'Today';
+  if (iso === yesterdayStr) return 'Yesterday';
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** Group a sorted expense array by date, preserving order */
+function groupByDate(expenses: Expense[]): { label: string; items: Expense[] }[] {
+  const groups: { label: string; items: Expense[] }[] = [];
+  const seen = new Map<string, number>();
+  for (const e of expenses) {
+    const label = dateGroupLabel(e.date);
+    if (seen.has(label)) {
+      groups[seen.get(label)!].items.push(e);
+    } else {
+      seen.set(label, groups.length);
+      groups.push({ label, items: [e] });
+    }
+  }
+  return groups;
 }
 
 interface Filters { from?: string; to?: string; categoryIds?: string[]; page: number; pageSize: number; }
@@ -45,6 +70,7 @@ function CategoryBadge({ category }: { category: Category | undefined }) {
 function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
   expense: Expense; onCancel: () => void; onConfirm: () => void; isPending: boolean; error: string | null;
 }) {
+  const { formatMoney } = useSettings();
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
@@ -52,7 +78,7 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
         <h2 id="delete-dialog-title" className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete expense?</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">This action cannot be undone.</p>
         <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-4">
-          {formatPHP(expense.amount)}{expense.description ? ` — ${expense.description}` : ''}
+          {formatMoney(expense.amount)}{expense.description ? ` — ${expense.description}` : ''}
         </p>
         {error && <p role="alert" className="mb-4 rounded-xl bg-red-50/80 dark:bg-red-900/20 border border-red-200/60 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">
@@ -73,6 +99,7 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ExpensesPage() {
+  const { formatMoney } = useSettings();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [showForm, setShowForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
@@ -120,6 +147,7 @@ export default function ExpensesPage() {
   // Page-level total (sum of current page only — labeled clearly)
   const pageTotal = expensesData?.data.reduce((sum, e) => sum + e.amount, 0) ?? 0;
   const hasMultiplePages = totalPages > 1;
+  const groups = expensesData ? groupByDate(expensesData.data) : [];
 
   return (
     <div className="space-y-5">
@@ -213,35 +241,43 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.05] dark:divide-white/[0.05]">
-                {expensesData.data.map((expense) => (
-                  <tr key={expense.id} onClick={() => openEdit(expense)}
-                    className="group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
-                    tabIndex={0} role="button"
-                    aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}>
-                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(expense.date)}</td>
-                    <td className="px-4 py-3"><CategoryBadge category={categoryMap.get(expense.categoryId)} /></td>
-                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200 max-w-xs">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="truncate">{expense.description ?? <span className="text-gray-400">—</span>}</span>
-                        {expense.receiptUrl && <ReceiptIcon />}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100 tabular-nums whitespace-nowrap">{formatPHP(expense.amount)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
-                        {/* Edit affordance */}
-                        <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Edit</span>
-                        <button type="button" onClick={(e) => openDelete(e, expense)}
-                          className="rounded-lg p-1 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-all focus:outline-none"
-                          aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                {groups.map(({ label, items }) => (
+                  <React.Fragment key={label}>
+                    <tr aria-hidden="true">
+                      <td colSpan={5} className="px-4 pt-3 pb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
+                      </td>
+                    </tr>
+                    {items.map((expense) => (
+                      <tr key={expense.id} onClick={() => openEdit(expense)}
+                        className="group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                        tabIndex={0} role="button"
+                        aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(expense.date)}</td>
+                        <td className="px-4 py-3"><CategoryBadge category={categoryMap.get(expense.categoryId)} /></td>
+                        <td className="px-4 py-3 text-gray-700 dark:text-gray-200 max-w-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="truncate">{expense.description ?? <span className="text-gray-400">—</span>}</span>
+                            {expense.receiptUrl && <ReceiptIcon />}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100 tabular-nums whitespace-nowrap">{formatMoney(expense.amount)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                            <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Edit</span>
+                            <button type="button" onClick={(e) => openDelete(e, expense)}
+                              className="rounded-lg p-1 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-all focus:outline-none"
+                              aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
               {/* Total footer row */}
@@ -250,7 +286,7 @@ export default function ExpensesPage() {
                   <td colSpan={3} className="px-4 py-3 text-xs font-medium text-gray-400 dark:text-gray-500">
                     {hasMultiplePages ? `Page ${filters.page} total` : `Total · ${expensesData.data.length} expense${expensesData.data.length !== 1 ? 's' : ''}`}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatPHP(pageTotal)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatMoney(pageTotal)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -258,42 +294,48 @@ export default function ExpensesPage() {
 
             {/* Mobile list */}
             <ul className="md:hidden divide-y divide-black/[0.05] dark:divide-white/[0.05]">
-              {expensesData.data.map((expense) => (
-                <li key={expense.id} className="relative">
-                  <div role="button" tabIndex={0} onClick={() => openEdit(expense)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:bg-black/[0.04] dark:active:bg-white/[0.04] transition-colors cursor-pointer"
-                    aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}>
-                    <span className="text-xl shrink-0" aria-hidden="true">{categoryMap.get(expense.categoryId)?.icon ?? '💸'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
-                          {expense.description ?? categoryMap.get(expense.categoryId)?.name ?? '—'}
-                        </p>
-                        {expense.receiptUrl && <ReceiptIcon />}
+              {groups.map(({ label, items }) => (
+                <React.Fragment key={label}>
+                  <li className="px-4 pt-3 pb-1 bg-black/[0.01] dark:bg-white/[0.01]" aria-hidden="true">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
+                  </li>
+                  {items.map((expense) => (
+                    <li key={expense.id} className="relative">
+                      <div role="button" tabIndex={0} onClick={() => openEdit(expense)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:bg-black/[0.04] dark:active:bg-white/[0.04] transition-colors cursor-pointer"
+                        aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}>
+                        <span className="text-xl shrink-0" aria-hidden="true">{categoryMap.get(expense.categoryId)?.icon ?? '💸'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
+                              {expense.description ?? categoryMap.get(expense.categoryId)?.name ?? '—'}
+                            </p>
+                            {expense.receiptUrl && <ReceiptIcon />}
+                          </div>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                            {categoryMap.get(expense.categoryId) && <span>{categoryMap.get(expense.categoryId)!.name}</span>}
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tabular-nums pr-10">{formatMoney(expense.amount)}</span>
                       </div>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                        {formatDate(expense.date)}
-                        {categoryMap.get(expense.categoryId) && <span className="ml-1.5">· {categoryMap.get(expense.categoryId)!.name}</span>}
-                      </p>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tabular-nums pr-10">{formatPHP(expense.amount)}</span>
-                  </div>
-                  <button type="button" onClick={(e) => openDelete(e, expense)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-colors focus:outline-none"
-                    aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </li>
+                      <button type="button" onClick={(e) => openDelete(e, expense)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-colors focus:outline-none"
+                        aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </li>
+                  ))}
+                </React.Fragment>
               ))}
               {/* Mobile total footer */}
               <li className="flex items-center justify-between px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/[0.06] dark:border-white/[0.06]">
                 <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
                   {hasMultiplePages ? `Page ${filters.page} total` : `${expensesData.data.length} expense${expensesData.data.length !== 1 ? 's' : ''}`}
                 </span>
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatPHP(pageTotal)}</span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatMoney(pageTotal)}</span>
               </li>
             </ul>
           </>

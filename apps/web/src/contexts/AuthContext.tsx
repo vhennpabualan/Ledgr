@@ -5,6 +5,7 @@ interface AuthContextValue {
   accessToken: string | null;
   setAccessToken: (token: string | null) => void;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -40,15 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-sm text-gray-400">Loading...</div>
+      <div className="flex h-screen items-center justify-center bg-slate-100 dark:bg-[#0f0f1a]" role="status" aria-live="polite">
+        <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
       </div>
     );
   }
 
   return (
     <AuthContext.Provider
-      value={{ accessToken, setAccessToken, isAuthenticated: accessToken !== null }}
+      value={{ accessToken, setAccessToken, isAuthenticated: accessToken !== null, loading }}
     >
       {children}
     </AuthContext.Provider>

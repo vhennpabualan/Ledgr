@@ -4,6 +4,7 @@ import { expensesApi, categoriesApi } from '../lib/api';
 import type { Expense, Category, PaginatedResult } from '@ledgr/types';
 import ExpenseForm from '../components/ExpenseForm';
 import DatePicker from '../components/DatePicker';
+import BottomSheet from '../components/BottomSheet';
 
 function formatPHP(minorUnits: number): string {
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minorUnits / 100);
@@ -320,23 +321,9 @@ export default function ExpensesPage() {
       )}
 
       {/* Expense form modal */}
-      {showForm && (
-        <div role="dialog" aria-modal="true" aria-label={editingExpense ? 'Edit expense' : 'Add expense'}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={closeForm} aria-hidden="true" />
-          <div className="relative z-10 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/70 dark:border-white/[0.08] shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top,16px))] sm:max-h-[85vh]">
-            <div className="flex justify-center pt-3 pb-1 sm:hidden" aria-hidden="true">
-              <div className="h-1 w-10 rounded-full bg-black/10 dark:bg-white/10" />
-            </div>
-            <div className="px-6 pt-4 pb-3 sm:pt-6 border-b border-black/[0.06] dark:border-white/[0.06]">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">{editingExpense ? 'Edit expense' : 'Add expense'}</h2>
-            </div>
-            <div className="overflow-y-auto flex-1 min-h-0 px-6 pb-6 pt-4">
-              <ExpenseForm expense={editingExpense} onSuccess={closeForm} onCancel={closeForm} />
-            </div>
-          </div>
-        </div>
-      )}
+      <BottomSheet open={showForm} onClose={closeForm} title={editingExpense ? 'Edit expense' : 'Add expense'}>
+        <ExpenseForm expense={editingExpense} onSuccess={closeForm} onCancel={closeForm} />
+      </BottomSheet>
 
       {deletingExpense && (
         <DeleteDialog expense={deletingExpense} onCancel={closeDelete}

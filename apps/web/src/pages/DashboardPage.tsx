@@ -6,6 +6,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { todayISO } from '../components/DatePicker';
+import BottomSheet from '../components/BottomSheet';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,60 +96,87 @@ function IncomeModal({ year, month, current, onClose }: IncomeModalProps) {
 
 // ─── Balance card ─────────────────────────────────────────────────────────────
 
+function EyeIcon({ hidden }: { hidden: boolean }) {
+  return hidden ? (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+    </svg>
+  ) : (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+      <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
 function BalanceCard({ balance, onEdit }: { balance: BalanceSummary; onEdit: () => void }) {
   const { income, totalSpent, remaining, remainingAfterPending, pendingTotal, percentSpent } = balance;
+  const [hidden, setHidden] = useState(false);
   const pct = Math.min(percentSpent, 100);
   const isOver = remaining < 0;
   const isOverAfterPending = remainingAfterPending < 0;
   const barColor = isOver ? 'bg-red-400' : percentSpent >= 80 ? 'bg-amber-400' : 'bg-emerald-400';
+  const mask = '••••••';
 
   return (
     <div className={`${glass} p-5`}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{income?.label ?? 'Monthly Income'}</p>
-          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-0.5">{income ? formatPHP(income.amount) : '—'}</p>
+      {/* Hero: Remaining balance */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">Remaining balance</p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setHidden((h) => !h)}
+              className="rounded-xl p-1.5 text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors focus:outline-none"
+              aria-label={hidden ? 'Show amounts' : 'Hide amounts'}
+            >
+              <EyeIcon hidden={hidden} />
+            </button>
+            <button onClick={onEdit}
+              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors">
+              {income ? 'Edit' : 'Set income'}
+            </button>
+          </div>
         </div>
-        <button onClick={onEdit}
-          className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors">
-          {income ? 'Edit' : 'Set income'}
-        </button>
+        <p className={`text-4xl font-bold mt-1 ${isOver ? 'text-red-500 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}`}>
+          {income
+            ? (hidden ? mask : (isOver ? `-${formatPHP(Math.abs(remaining))}` : formatPHP(remaining)))
+            : '—'}
+        </p>
+        {income && !hidden && pendingTotal > 0 && (
+          <p className={`text-sm mt-0.5 font-medium ${isOverAfterPending ? 'text-red-400' : 'text-amber-500'}`}>
+            {isOverAfterPending ? `-${formatPHP(Math.abs(remainingAfterPending))}` : formatPHP(remainingAfterPending)} after pending
+          </p>
+        )}
+        {income && hidden && pendingTotal > 0 && (
+          <p className="text-sm mt-0.5 font-medium text-amber-500">{mask} after pending</p>
+        )}
       </div>
 
       {income ? (
         <>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="rounded-xl bg-black/[0.04] dark:bg-white/[0.04] p-3">
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Spent</p>
-              <p className="text-base font-bold text-gray-800 dark:text-gray-100">{formatPHP(totalSpent)}</p>
+          {/* Progress bar */}
+          <div className="mb-4">
+            <div className="h-2 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.06]">
+              <div className={`h-2 rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${hidden ? 0 : pct}%` }} />
             </div>
-            <div className={`rounded-xl p-3 ${isOver ? 'bg-red-50/80 dark:bg-red-900/20' : 'bg-emerald-50/80 dark:bg-emerald-900/20'}`}>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Remaining</p>
-              <p className={`text-base font-bold ${isOver ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {isOver ? `-${formatPHP(Math.abs(remaining))}` : formatPHP(remaining)}
-              </p>
+            <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <span>{hidden ? '–' : `${percentSpent.toFixed(1)}% spent`}</span>
+              <span>{hidden ? '–' : `${(100 - pct).toFixed(1)}% left`}</span>
             </div>
           </div>
 
-          {pendingTotal > 0 && (
-            <div className="flex items-center justify-between rounded-xl border border-amber-200/60 bg-amber-50/60 dark:bg-amber-900/20 px-3 py-2 mb-4">
-              <div>
-                <p className="text-xs text-amber-700 font-medium">After pending expenses</p>
-                <p className="text-xs text-amber-500">-{formatPHP(pendingTotal)} reserved</p>
-              </div>
-              <p className={`text-base font-bold tabular-nums ${isOverAfterPending ? 'text-red-500 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                {isOverAfterPending ? `-${formatPHP(Math.abs(remainingAfterPending))}` : formatPHP(remainingAfterPending)}
-              </p>
+          {/* Secondary row: salary + spent */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-black/[0.04] dark:bg-white/[0.04] p-3">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{income.label ?? 'Salary'}</p>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{hidden ? mask : formatPHP(income.amount)}</p>
             </div>
-          )}
-
-          <div>
-            <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
-              <span>{percentSpent.toFixed(1)}% spent</span>
-              <span>{(100 - pct).toFixed(1)}% left</span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-black/[0.06] dark:bg-white/[0.06]">
-              <div className={`h-1.5 rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+            <div className="rounded-xl bg-black/[0.04] dark:bg-white/[0.04] p-3">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Spent</p>
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{hidden ? mask : formatPHP(totalSpent)}</p>
             </div>
           </div>
         </>
@@ -281,30 +309,35 @@ function PendingItemsCard({ year, month, categories }: { year: number; month: nu
           <input type="number" placeholder="Amount" value={amount} min="0.01" step="0.01"
             onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
             className="flex-1 rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-          <div className="relative flex-1">
-            <button type="button" onClick={() => setCatOpen((o) => !o)}
+          <div className="flex-1">
+            <button type="button" onClick={() => setCatOpen(true)}
               className="w-full flex items-center justify-between rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-amber-400">
               <span className={categoryId ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}>
                 {categoryId ? `${categoryMap.get(categoryId)?.icon} ${categoryMap.get(categoryId)?.name}` : 'Category'}
               </span>
-              <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 text-gray-400 transition-transform ${catOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </button>
-            {catOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setCatOpen(false)} aria-hidden="true" />
-                <ul className="absolute z-20 bottom-full mb-1 w-full rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#1a1a2e]/90 backdrop-blur-md shadow-lg max-h-40 overflow-y-auto py-1">
-                  <li onClick={() => { setCategoryId(''); setCatOpen(false); }} className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500 cursor-pointer hover:bg-black/[0.04] dark:hover:bg-white/[0.04]">None</li>
-                  {categories.filter((c) => !c.isArchived).map((c) => (
-                    <li key={c.id} onClick={() => { setCategoryId(c.id); setCatOpen(false); }}
-                      className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors ${categoryId === c.id ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}>
-                      <span aria-hidden="true">{c.icon}</span>{c.name}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            <BottomSheet open={catOpen} onClose={() => setCatOpen(false)} title="Select category">
+              <ul className="-mx-6 -mb-6">
+                <li
+                  onClick={() => { setCategoryId(''); setCatOpen(false); }}
+                  className={`flex items-center gap-3 px-6 py-3.5 text-sm cursor-pointer transition-colors border-b border-black/[0.05] dark:border-white/[0.05] ${categoryId === '' ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-500 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}
+                >
+                  None
+                </li>
+                {categories.filter((c) => !c.isArchived).map((c) => (
+                  <li key={c.id}
+                    onClick={() => { setCategoryId(c.id); setCatOpen(false); }}
+                    className={`flex items-center gap-3 px-6 py-3.5 text-sm cursor-pointer transition-colors border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 ${categoryId === c.id ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}
+                  >
+                    <span className="text-lg" aria-hidden="true">{c.icon}</span>
+                    {c.name}
+                  </li>
+                ))}
+              </ul>
+            </BottomSheet>
           </div>
         </div>
         {formError && <p className="text-xs text-red-500 dark:text-red-400">{formError}</p>}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { budgetsApi, categoriesApi } from '../lib/api';
 import type { Budget, BudgetStatus, Category, CreateBudgetDTO, PendingSpend } from '@ledgr/types';
+import BottomSheet from '../components/BottomSheet';
 
 function formatPHP(minorUnits: number): string {
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', currencyDisplay: 'symbol' }).format(minorUnits / 100);
@@ -500,23 +501,10 @@ export default function BudgetsPage() {
       )}
 
       {/* Add budget modal */}
-      {showForm && (
-        <div role="dialog" aria-modal="true" aria-label="Add budget" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowForm(false)} aria-hidden="true" />
-          <div className="relative z-10 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/70 dark:border-white/[0.08] shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top,16px))] sm:max-h-[85vh]">
-            <div className="flex justify-center pt-3 pb-1 sm:hidden" aria-hidden="true">
-              <div className="h-1 w-10 rounded-full bg-black/10 dark:bg-white/10" />
-            </div>
-            <div className="px-6 pt-4 pb-3 sm:pt-6 border-b border-black/[0.06] dark:border-white/[0.06]">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">Add budget</h2>
-            </div>
-            <div className="overflow-y-auto flex-1 min-h-0 px-6 pb-6">
-              <BudgetForm categories={categories} year={year} month={month}
-                onSuccess={() => setShowForm(false)} onCancel={() => setShowForm(false)} />
-            </div>
-          </div>
-        </div>
-      )}
+      <BottomSheet open={showForm} onClose={() => setShowForm(false)} title="Add budget">
+        <BudgetForm categories={categories} year={year} month={month}
+          onSuccess={() => setShowForm(false)} onCancel={() => setShowForm(false)} />
+      </BottomSheet>
 
       {/* Delete confirmation */}
       {deletingId && (

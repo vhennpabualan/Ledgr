@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { categoriesApi } from '../lib/api';
 import type { Category, CreateCategoryDTO } from '@ledgr/types';
 import BottomSheet from '../components/BottomSheet';
+import { useAnimatedDelete } from '../hooks/useAnimatedDelete';
 
 function extractError(err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong.';
@@ -12,10 +13,11 @@ const glass = 'rounded-2xl border border-white/70 bg-white/50 backdrop-blur-md s
 
 // ─── Category card ────────────────────────────────────────────────────────────
 
-function CategoryCard({ category, onEdit, onArchive, onDelete, archivePending }: {
+function CategoryCard({ category, onEdit, onArchive, onRestore, onDelete, archivePending }: {
   category: Category;
   onEdit: (c: Category) => void;
   onArchive: (c: Category) => void;
+  onRestore: (c: Category) => void;
   onDelete: (c: Category) => void;
   archivePending: boolean;
 }) {
@@ -24,7 +26,7 @@ function CategoryCard({ category, onEdit, onArchive, onDelete, archivePending }:
 
   return (
     <div className={[
-      'group relative rounded-2xl border p-4 transition-all duration-200',
+      'group relative rounded-2xl border p-4 transition-all duration-200 overflow-hidden',
       isArchived
         ? 'border-black/[0.05] bg-black/[0.02] dark:border-white/[0.06] dark:bg-white/[0.03] opacity-50'
         : 'border-white/70 dark:border-white/[0.10] bg-white/50 dark:bg-white/[0.08] backdrop-blur-md shadow-sm shadow-black/[0.06] hover:shadow-md hover:shadow-black/[0.08] hover:-translate-y-0.5',
@@ -44,7 +46,7 @@ function CategoryCard({ category, onEdit, onArchive, onDelete, archivePending }:
       </p>
 
       {/* Badges */}
-      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+      <div className="flex items-center gap-1.5 mt-1 flex-wrap min-h-[20px]">
         {isSystem && (
           <span className="text-[10px] font-medium text-indigo-500 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-900/20 border border-indigo-200/50 rounded-full px-2 py-0.5">
             System
@@ -57,28 +59,41 @@ function CategoryCard({ category, onEdit, onArchive, onDelete, archivePending }:
         )}
       </div>
 
-      {/* Hover action overlay — only for user-owned categories */}
+      {/* Action row — slides up on hover, only for user-owned categories */}
       {!isSystem && (
-        <div className="absolute inset-0 rounded-2xl bg-black/[0.03] dark:bg-white/[0.03] opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-end justify-end gap-1 p-2">
-          {!isArchived && (
-            <button type="button" onClick={() => onEdit(category)}
-              className="rounded-xl bg-white/90 border border-black/[0.08] px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-white transition-colors shadow-sm focus:outline-none"
-              aria-label={`Edit ${category.name}`}>
-              Edit
-            </button>
+        <div className="flex items-center gap-1.5 mt-2 translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-150">
+          {isArchived ? (
+            <>
+              <button type="button" onClick={() => onRestore(category)} disabled={archivePending}
+                className="flex-1 rounded-lg border border-emerald-200/60 bg-emerald-50/80 dark:bg-emerald-900/20 px-2 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100/80 disabled:opacity-40 transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                aria-label={`Restore ${category.name}`}>
+                Restore
+              </button>
+              <button type="button" onClick={() => onDelete(category)}
+                className="flex-1 rounded-lg border border-red-200/60 bg-red-50/80 dark:bg-red-900/20 px-2 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100/80 transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                aria-label={`Delete ${category.name}`}>
+                Delete
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => onEdit(category)}
+                className="flex-1 rounded-lg border border-black/[0.08] dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.06] px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-white/[0.10] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                aria-label={`Edit ${category.name}`}>
+                Edit
+              </button>
+              <button type="button" onClick={() => onArchive(category)} disabled={archivePending}
+                className="flex-1 rounded-lg border border-amber-200/60 bg-amber-50/80 dark:bg-amber-900/20 px-2 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100/80 disabled:opacity-40 transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                aria-label={`Archive ${category.name}`}>
+                Archive
+              </button>
+              <button type="button" onClick={() => onDelete(category)}
+                className="flex-1 rounded-lg border border-red-200/60 bg-red-50/80 dark:bg-red-900/20 px-2 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100/80 transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                aria-label={`Delete ${category.name}`}>
+                Delete
+              </button>
+            </>
           )}
-          {!isArchived && (
-            <button type="button" onClick={() => onArchive(category)} disabled={archivePending}
-              className="rounded-xl bg-amber-50/90 border border-amber-200/60 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition-colors shadow-sm focus:outline-none"
-              aria-label={`Archive ${category.name}`}>
-              Archive
-            </button>
-          )}
-          <button type="button" onClick={() => onDelete(category)}
-            className="rounded-xl bg-red-50/90 border border-red-200/60 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm focus:outline-none"
-            aria-label={`Delete ${category.name}`}>
-            Delete
-          </button>
         </div>
       )}
     </div>
@@ -103,12 +118,12 @@ function CategoryForm({ categories, onSuccess, onCancel, editing }: {
 
   const createMutation = useMutation({
     mutationFn: (data: CreateCategoryDTO) => categoriesApi.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['categories'] }); onSuccess(); },
+    onSuccess: () => { queryClient.refetchQueries({ queryKey: ['categories'] }); onSuccess(); },
     onError: (err) => setFormError(extractError(err)),
   });
   const updateMutation = useMutation({
     mutationFn: (data: Partial<CreateCategoryDTO>) => categoriesApi.patch(editing!.id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['categories'] }); onSuccess(); },
+    onSuccess: () => { queryClient.refetchQueries({ queryKey: ['categories'] }); onSuccess(); },
     onError: (err) => setFormError(extractError(err)),
   });
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -279,10 +294,11 @@ export default function CategoriesPage() {
   const [archivePendingId, setArchivePendingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
+  const { exitingIds, triggerDelete } = useAnimatedDelete(['categories']);
+
   const { data: categories = [], isLoading, isError, refetch } = useQuery<Category[]>({
     queryKey: ['categories'],
     queryFn: () => categoriesApi.list().then((r) => r.data),
-    staleTime: 10 * 60 * 1000,
   });
 
   const archiveMutation = useMutation({
@@ -290,15 +306,22 @@ export default function CategoriesPage() {
     mutationFn: (id: string) => categoriesApi.patch(id, { isArchived: true } as any),
     onMutate: (id) => setArchivePendingId(id),
     onSettled: () => setArchivePendingId(null),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: () => queryClient.refetchQueries({ queryKey: ['categories'] }),
+  });
+
+  const restoreMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mutationFn: (id: string) => categoriesApi.patch(id, { isArchived: false } as any),
+    onMutate: (id) => setArchivePendingId(id),
+    onSettled: () => setArchivePendingId(null),
+    onSuccess: () => queryClient.refetchQueries({ queryKey: ['categories'] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => categoriesApi.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['categories'] }); setDeletingCategory(null); setDeleteError(null); },
+    onSuccess: () => { queryClient.refetchQueries({ queryKey: ['categories'] }); setDeletingCategory(null); setDeleteError(null); },
     onError: (err) => setDeleteError(extractError(err)),
   });
-
   const systemActive = categories.filter((c) => c.userId === null && !c.isArchived);
   const userActive = categories.filter((c) => c.userId !== null && !c.isArchived);
   const archived = categories.filter((c) => c.isArchived);
@@ -314,6 +337,7 @@ export default function CategoriesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Categories</h1>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{userActive.length} custom · {systemActive.length} system</p>
         </div>
         <button type="button" onClick={() => { setEditingCategory(undefined); setShowForm(true); }}
@@ -347,9 +371,13 @@ export default function CategoriesPage() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {userActive.map((c) => (
-                    <CategoryCard key={c.id} category={c}
-                      onEdit={openEdit} onArchive={(cat) => archiveMutation.mutate(cat.id)} onDelete={openDelete}
-                      archivePending={archivePendingId === c.id} />
+                    <div key={c.id} className={exitingIds.has(c.id) ? 'item-exit' : 'item-enter'}>
+                      <CategoryCard category={c}
+                        onEdit={openEdit} onArchive={(cat) => archiveMutation.mutate(cat.id)}
+                        onRestore={(cat) => restoreMutation.mutate(cat.id)}
+                        onDelete={(cat) => triggerDelete(cat.id, () => categoriesApi.delete(cat.id))}
+                        archivePending={archivePendingId === c.id} />
+                    </div>
                   ))}
                 </div>
               )}
@@ -360,9 +388,13 @@ export default function CategoriesPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">System Categories</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {systemActive.map((c) => (
-                  <CategoryCard key={c.id} category={c}
-                    onEdit={openEdit} onArchive={(cat) => archiveMutation.mutate(cat.id)} onDelete={openDelete}
-                    archivePending={archivePendingId === c.id} />
+                  <div key={c.id} className="item-enter">
+                    <CategoryCard category={c}
+                      onEdit={openEdit} onArchive={(cat) => archiveMutation.mutate(cat.id)}
+                      onRestore={(cat) => restoreMutation.mutate(cat.id)}
+                      onDelete={(cat) => triggerDelete(cat.id, () => categoriesApi.delete(cat.id))}
+                      archivePending={archivePendingId === c.id} />
+                  </div>
                 ))}
               </div>
             </section>
@@ -380,9 +412,13 @@ export default function CategoriesPage() {
                 {showArchived && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {archived.map((c) => (
-                      <CategoryCard key={c.id} category={c}
-                        onEdit={openEdit} onArchive={(cat) => archiveMutation.mutate(cat.id)} onDelete={openDelete}
-                        archivePending={archivePendingId === c.id} />
+                      <div key={c.id} className={exitingIds.has(c.id) ? 'item-exit' : 'item-enter'}>
+                        <CategoryCard category={c}
+                          onEdit={openEdit} onArchive={(cat) => archiveMutation.mutate(cat.id)}
+                          onRestore={(cat) => restoreMutation.mutate(cat.id)}
+                          onDelete={(cat) => triggerDelete(cat.id, () => categoriesApi.delete(cat.id))}
+                          archivePending={archivePendingId === c.id} />
+                      </div>
                     ))}
                   </div>
                 )}
@@ -402,7 +438,10 @@ export default function CategoriesPage() {
 
       {deletingCategory && (
         <DeleteDialog category={deletingCategory} onCancel={closeDelete}
-          onConfirm={() => deleteMutation.mutate(deletingCategory.id)}
+          onConfirm={() => {
+            triggerDelete(deletingCategory.id, () => categoriesApi.delete(deletingCategory.id));
+            setDeletingCategory(null);
+          }}
           isPending={deleteMutation.isPending} error={deleteError} />
       )}
     </div>

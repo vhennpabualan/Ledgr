@@ -6,6 +6,7 @@ import {
   listCategories,
   createCategory,
   archiveCategory,
+  restoreCategory,
   updateCategory,
   deleteCategory,
 } from '../services/category.service.js';
@@ -42,6 +43,8 @@ categoryRouter.patch('/:id', async (req: Request, res: Response) => {
   const category =
     body.isArchived === true
       ? await archiveCategory(id, req.userId!)
+      : body.isArchived === false
+      ? await restoreCategory(id, req.userId!)
       : await updateCategory(id, req.userId!, body);
 
   res.json(category);

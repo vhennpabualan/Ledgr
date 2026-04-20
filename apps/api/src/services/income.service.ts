@@ -11,6 +11,7 @@ function rowToIncome(row: Record<string, unknown>): Income {
     year: Number(row.year),
     month: Number(row.month),
     label: row.label as string,
+    recurringId: (row.recurring_id as string | null) ?? null,
     createdAt: (row.created_at as Date).toISOString(),
     updatedAt: (row.updated_at as Date).toISOString(),
   };

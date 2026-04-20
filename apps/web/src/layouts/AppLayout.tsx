@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import { categoriesApi, expensesApi, budgetsApi, reportsApi, incomeApi } from '../lib/api';
+import { categoriesApi, expensesApi, budgetsApi, reportsApi, incomeApi, recurringApi, walletsApi } from '../lib/api';
 import BottomSheet from '../components/BottomSheet';
 import ExpenseForm from '../components/ExpenseForm';
 
@@ -12,18 +12,28 @@ const DESKTOP_NAV = [
   { to: '/',           label: 'Dashboard',  end: true  },
   { to: '/expenses',   label: 'Expenses',   end: false },
   { to: '/budgets',    label: 'Budgets',    end: false },
+  { to: '/recurring',  label: 'Recurring',  end: false },
   { to: '/reports',    label: 'Reports',    end: false },
   { to: '/categories', label: 'Categories', end: false },
+  { to: '/wallets',    label: 'Accounts',   end: false },
 ] as const;
 
 // Mobile nav: 4 items with FAB in the center slot
 const MOBILE_NAV_LEFT  = [
-  { to: '/',         label: 'Home',     end: true  },
-  { to: '/expenses', label: 'Expenses', end: false },
+  { to: '/',        label: 'Home',    end: true  },
+  { to: '/wallets', label: 'Accounts', end: false },
 ] as const;
 const MOBILE_NAV_RIGHT = [
-  { to: '/reports',    label: 'Reports', end: false },
-  { to: '/categories', label: 'More',    end: false },
+  { to: '/recurring', label: 'Recurring', end: false },
+  // "More" is handled separately as a dropdown trigger
+] as const;
+
+// Items shown in the "More" dropdown on mobile
+const MOBILE_MORE_ITEMS = [
+  { to: '/expenses',   label: 'Expenses' },
+  { to: '/budgets',    label: 'Budgets' },
+  { to: '/reports',    label: 'Reports' },
+  { to: '/categories', label: 'Categories' },
 ] as const;
 
 /** Pull email from JWT payload without a library */
@@ -80,6 +90,24 @@ function NavIcon({ route, isActive }: { route: string; isActive: boolean }) {
     return (
       <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 12h.01M7 17h.01M11 7h6M11 12h6M11 17h6" />
+      </svg>
+    );
+  if (route === '/recurring')
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+    );
+  if (route === '/recurring-income')
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    );
+  if (route === '/wallets')
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
       </svg>
     );
   // settings
@@ -160,9 +188,11 @@ function usePageTitle() {
     '/': 'Dashboard',
     '/expenses': 'Expenses',
     '/budgets': 'Budgets',
+    '/recurring': 'Recurring',
     '/reports': 'Reports',
     '/categories': 'Categories',
     '/settings': 'Settings',
+    '/wallets': 'Accounts',
   };
   return map[pathname] ?? 'Ledgr';
 }
@@ -198,6 +228,12 @@ function usePrefetch() {
       case '/categories':
         queryClient.prefetchQuery({ queryKey: ['categories'], queryFn: () => categoriesApi.list().then(r => r.data), staleTime: STALE });
         break;
+      case '/recurring':
+        queryClient.prefetchQuery({ queryKey: ['recurring'], queryFn: () => recurringApi.list().then(r => r.data), staleTime: STALE });
+        break;
+      case '/wallets':
+        queryClient.prefetchQuery({ queryKey: ['wallets'], queryFn: () => walletsApi.list().then(r => r.data), staleTime: STALE });
+        break;
     }
   }, [queryClient]);
 }
@@ -212,6 +248,7 @@ export default function AppLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const pageTitle = usePageTitle();
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const prefetch = usePrefetch();
 
@@ -234,6 +271,13 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-slate-100 dark:bg-[#0f0f1a]">
+      {/* Skip to main content — keyboard accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-gray-900 focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
       {/* Mesh orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
         <div className="absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-indigo-300/25 dark:bg-indigo-600/10 blur-3xl" />
@@ -244,8 +288,13 @@ export default function AppLayout() {
       {/* ── Desktop sidebar ─────────────────────────────────────── */}
       <aside className="relative hidden md:flex w-56 flex-shrink-0 flex-col border-r border-black/[0.06] dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.03] backdrop-blur-xl">
         {/* Logo */}
-        <div className="flex items-center gap-2 px-6 py-5">
-          <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Ledgr</span>
+        <div className="flex items-center gap-2.5 px-6 py-5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 shadow-sm shadow-indigo-500/30 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <span className="text-lg font-bold tracking-tight text-gray-900 dark:text-white">Ledgr</span>
         </div>
 
         {/* Nav */}
@@ -295,13 +344,20 @@ export default function AppLayout() {
         {/* Top bar */}
         <header className="relative z-20 flex items-center justify-between px-4 md:px-8 border-b border-black/[0.06] dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.03] backdrop-blur-xl pt-[env(safe-area-inset-top)] md:pt-0">
           <div className="flex items-center justify-between w-full py-3">
-            <span className="text-base font-semibold text-gray-800 dark:text-gray-100 md:hidden">{pageTitle}</span>
+            <div className="flex items-center gap-2 md:hidden">
+              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-600 shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <span className="text-base font-bold tracking-tight text-gray-900 dark:text-white">Ledgr</span>
+            </div>
             <span className="hidden md:block text-sm font-semibold text-gray-800 dark:text-gray-100">{pageTitle}</span>
             <UserMenu onLogout={handleLogout} />
           </div>
         </header>
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 pb-32 md:p-8 md:pb-8">
+        <main id="main-content" ref={mainRef} className="flex-1 overflow-y-auto p-4 pb-32 md:p-8 md:pb-8">
           <div className="mx-auto max-w-5xl" key={pathname} style={{ animation: 'pageEnter 0.22s ease both' }}>
             <Outlet />
           </div>
@@ -324,7 +380,7 @@ export default function AppLayout() {
               to={to}
               end={end}
               onTouchStart={() => prefetch(to)}
-              className="flex-1 focus:outline-none"
+              className="flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
             >
               {({ isActive }) => (
                 <span className={[
@@ -366,7 +422,7 @@ export default function AppLayout() {
               to={to}
               end={end}
               onTouchStart={() => prefetch(to)}
-              className="flex-1 focus:outline-none"
+              className="flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
             >
               {({ isActive }) => (
                 <span className={[
@@ -379,8 +435,54 @@ export default function AppLayout() {
               )}
             </NavLink>
           ))}
+
+          {/* More button with bottom sheet */}
+          <button
+            type="button"
+            onClick={() => setShowMoreMenu(true)}
+            className="flex-1 focus:outline-none"
+            aria-label="More options"
+          >
+            <span className={[
+              'flex flex-col items-center justify-center gap-0.5 py-3 text-[10px] font-medium transition-colors duration-200',
+              MOBILE_MORE_ITEMS.some(item => pathname === item.to)
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : 'text-gray-400 dark:text-gray-500',
+            ].join(' ')}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+              <span>More</span>
+            </span>
+          </button>
         </nav>
       </div>
+
+      {/* More menu bottom sheet */}
+      <BottomSheet
+        open={showMoreMenu}
+        onClose={() => setShowMoreMenu(false)}
+        title="More"
+      >
+        <div className="space-y-1">
+          {MOBILE_MORE_ITEMS.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              onClick={() => setShowMoreMenu(false)}
+              className={[
+                'flex items-center gap-4 px-4 py-4 rounded-xl text-base font-medium transition-colors duration-150',
+                pathname === to
+                  ? 'bg-indigo-600/10 text-indigo-700 dark:text-indigo-300'
+                  : 'text-gray-700 dark:text-gray-200 active:bg-black/[0.04] dark:active:bg-white/[0.04]',
+              ].join(' ')}
+            >
+              <NavIcon route={to} isActive={pathname === to} />
+              {label}
+            </Link>
+          ))}
+        </div>
+      </BottomSheet>
 
       {/* Desktop FAB */}
       <button

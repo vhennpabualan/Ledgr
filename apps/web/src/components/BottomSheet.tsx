@@ -1,4 +1,4 @@
-import { useEffect, useRef, ReactNode } from 'react';
+import { useEffect, useRef, ReactNode, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 interface BottomSheetProps {
@@ -17,16 +17,36 @@ interface BottomSheetProps {
 export default function BottomSheet({ open, onClose, title, children, ariaLabel }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ startY: number; currentY: number } | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
+
+  // Handle open/close with animation
+  useEffect(() => {
+    if (open) {
+      setShouldRender(true);
+      // Two rAFs: first lets the browser paint the initial off-screen position,
+      // second triggers the transition into view.
+      const id = requestAnimationFrame(() =>
+        requestAnimationFrame(() => setIsVisible(true))
+      );
+      return () => cancelAnimationFrame(id);
+    } else {
+      setIsVisible(false);
+      // Wait for exit animation before unmounting
+      const timer = setTimeout(() => setShouldRender(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   // Lock body scroll while open
   useEffect(() => {
-    if (open) {
+    if (isVisible) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [open]);
+  }, [isVisible]);
 
   // Close on Escape
   useEffect(() => {
@@ -61,18 +81,21 @@ export default function BottomSheet({ open, onClose, title, children, ariaLabel 
     dragState.current = null;
   }
 
-  if (!open) return null;
+  if (!shouldRender) return null;
 
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel ?? title}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${!isVisible ? 'pointer-events-none' : ''}`}
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+        className={[
+          'absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity duration-300',
+          isVisible ? 'opacity-100' : 'opacity-0',
+        ].join(' ')}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -80,7 +103,11 @@ export default function BottomSheet({ open, onClose, title, children, ariaLabel 
       {/* Sheet */}
       <div
         ref={sheetRef}
-        className="relative z-10 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/70 dark:border-white/[0.08] shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top,16px))] sm:max-h-[85vh] transition-transform duration-200"
+        className={[
+          'relative z-10 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl bg-white/80 dark:bg-white/[0.08] backdrop-blur-xl border border-white/70 dark:border-white/[0.08] shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top,16px))] sm:max-h-[85vh]',
+          'transition-transform duration-300 ease-out',
+          isVisible ? 'translate-y-0' : 'translate-y-full',
+        ].join(' ')}
         style={{ willChange: 'transform' }}
       >
         {/* Drag handle — touch target */}
@@ -95,13 +122,13 @@ export default function BottomSheet({ open, onClose, title, children, ariaLabel 
         </div>
 
         {/* Header */}
-        <div className="px-6 pt-4 pb-3 sm:pt-6 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+        <div className="px-6 pt-4 pb-3 sm:pt-6 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-4">
           <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-1.5 text-gray-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] transition-colors focus:outline-none"
             aria-label="Close"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-gray-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.06] hover:text-gray-600 dark:hover:text-gray-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />

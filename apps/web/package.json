@@ -1,6 +1,6 @@
 {
   "name": "@ledgr/web",
-  "version": "1.0.0",
+  "version": "1.3.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,10 +13,12 @@
     "@ledgr/types": "*",
     "@tanstack/react-query": "^5.99.0",
     "axios": "^1.15.0",
+    "clsx": "^2.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.3",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

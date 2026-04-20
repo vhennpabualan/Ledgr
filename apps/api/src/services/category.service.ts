@@ -115,6 +115,28 @@ export async function archiveCategory(
 }
 
 /**
+ * restoreCategory — set is_archived = false on a user-owned category.
+ */
+export async function restoreCategory(
+  id: string,
+  userId: string,
+): Promise<Category> {
+  const { rows } = await pool.query(
+    `UPDATE categories
+     SET is_archived = FALSE
+     WHERE id = $1 AND user_id = $2
+     RETURNING *`,
+    [id, userId],
+  );
+
+  if (rows.length === 0) {
+    throw new AppError(404, 'Category not found');
+  }
+
+  return rowToCategory(rows[0] as Record<string, unknown>);
+}
+
+/**
  * updateCategory — patch name/icon/color/parentId on a user-owned category.
  * Re-validates parent depth if parentId changes.
  * Throws 404 if not found or owned by another user.

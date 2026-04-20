@@ -43,8 +43,8 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
     mutationFn: ({ amount, label }: { amount: number; label: string }) =>
       budgetsApi.addPending(budget.id, { amount, label }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-pending', budget.id] });
-      queryClient.invalidateQueries({ queryKey: ['budget-status', budget.id] });
+      queryClient.refetchQueries({ queryKey: ['budget-pending', budget.id] });
+      queryClient.refetchQueries({ queryKey: ['budget-status', budget.id] });
       setPendingLabel(''); setPendingAmount(''); setPendingFormError(null);
     },
     onError: () => setPendingFormError('Failed to add item.'),
@@ -53,8 +53,8 @@ function BudgetCard({ budget, category, onDelete, deleteError }: BudgetCardProps
   const removePendingMutation = useMutation({
     mutationFn: (itemId: string) => budgetsApi.deletePending(budget.id, itemId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-pending', budget.id] });
-      queryClient.invalidateQueries({ queryKey: ['budget-status', budget.id] });
+      queryClient.refetchQueries({ queryKey: ['budget-pending', budget.id] });
+      queryClient.refetchQueries({ queryKey: ['budget-status', budget.id] });
     },
   });
 
@@ -282,6 +282,7 @@ interface BudgetFormProps { categories: Category[]; year: number; month: number;
 
 function BudgetForm({ categories, year, month, onSuccess, onCancel }: BudgetFormProps) {
   const queryClient = useQueryClient();
+  const { currency } = useSettings();
   const [categoryId, setCategoryId] = useState('');
   const [limitAmount, setLimitAmount] = useState('');
   const [rollover, setRollover] = useState(false);
@@ -296,7 +297,7 @@ function BudgetForm({ categories, year, month, onSuccess, onCancel }: BudgetForm
 
   const createMutation = useMutation({
     mutationFn: (data: CreateBudgetDTO) => budgetsApi.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['budgets'] }); onSuccess(); },
+    onSuccess: () => { queryClient.refetchQueries({ queryKey: ['budgets'] }); onSuccess(); },
     onError: (err: unknown) => {
       const msg = extractError(err);
       setFormError(msg.includes('409') || msg.toLowerCase().includes('conflict')
@@ -311,7 +312,7 @@ function BudgetForm({ categories, year, month, onSuccess, onCancel }: BudgetForm
     if (!categoryId) return setFormError('Please select a category.');
     const parsed = Math.round(parseFloat(limitAmount) * 100);
     if (!limitAmount || isNaN(parsed) || parsed <= 0) return setFormError('Limit must be a positive amount.');
-    createMutation.mutate({ categoryId, limitAmount: parsed, currency: 'PHP', year: formYear, month: formMonth, rollover });
+    createMutation.mutate({ categoryId, limitAmount: parsed, currency, year: formYear, month: formMonth, rollover });
   }
 
   return (
@@ -430,7 +431,7 @@ export default function BudgetsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => budgetsApi.delete(id),
     onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      queryClient.refetchQueries({ queryKey: ['budgets'] });
       setDeletingId(null);
       setDeleteErrors((prev) => { const next = { ...prev }; delete next[id]; return next; });
     },
@@ -486,7 +487,7 @@ export default function BudgetsPage() {
 
         <button type="button" onClick={() => setShowForm(true)}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
-          + Add Budget
+          + Add
         </button>
       </div>
 
@@ -503,7 +504,11 @@ export default function BudgetsPage() {
         </div>
       ) : budgets.length === 0 ? (
         <div className={`${glass} px-6 py-16 text-center border-dashed`}>
-          <p className="text-sm text-gray-400 dark:text-gray-500">No budgets for {formatMonthYear(year, month)}.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">No budgets for {formatMonthYear(year, month)}.</p>
+          <button type="button" onClick={() => setShowForm(true)}
+            className="mt-1 text-sm text-indigo-500 dark:text-indigo-400 hover:underline focus:outline-none">
+            Add your first budget
+          </button>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -84,29 +84,45 @@ function PreferencesSection() {
   const { theme, currency, setTheme, setCurrency, formatMoney } = useSettings();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const dropdownRef = useRef<HTMLUListElement>(null);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
 
+  // Recalculate position whenever it opens or on scroll/resize
   useEffect(() => {
     if (!currencyOpen || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setDropdownStyle({
-      position: 'fixed',
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-      zIndex: 9999,
-    });
+    const update = () => {
+      setDropdownRect(triggerRef.current!.getBoundingClientRect());
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
   }, [currencyOpen]);
 
+  // Close on outside click — ref-based, no stopPropagation
   useEffect(() => {
     if (!currencyOpen) return;
-    const close = () => setCurrencyOpen(false);
-    document.addEventListener('mousedown', close);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      window.removeEventListener('scroll', close, true);
-    };
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      ) return;
+      setCurrencyOpen(false);
+    }
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [currencyOpen]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!currencyOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCurrencyOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
   }, [currencyOpen]);
 
   const selectedCurrency = CURRENCIES.find((c) => c.value === currency);
@@ -137,28 +153,60 @@ function PreferencesSection() {
 
       {/* Currency */}
       <div>
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Currency</p>
+        <label htmlFor="currency-trigger" className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
+          Currency
+        </label>
         <div className="max-w-xs">
-          <button ref={triggerRef} type="button" onClick={(e) => { e.stopPropagation(); setCurrencyOpen((o) => !o); }}
-            className="w-full flex items-center justify-between rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors">
+          <button
+            id="currency-trigger"
+            ref={triggerRef}
+            type="button"
+            onClick={() => setCurrencyOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={currencyOpen}
+            className="w-full flex items-center justify-between rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
+          >
             <span>{selectedCurrency?.label}</span>
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-400 transition-transform shrink-0 ${currencyOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
           </button>
         </div>
-        {currencyOpen && createPortal(
-          <ul style={dropdownStyle} className="rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1a1a2e] shadow-xl overflow-hidden py-1">
+
+        {/* Portaled dropdown — escapes stacking context of backdrop-blur cards */}
+        {currencyOpen && dropdownRect && createPortal(
+          <ul
+            ref={dropdownRef}
+            role="listbox"
+            aria-label="Currency"
+            style={{
+              position: 'fixed',
+              top: dropdownRect.bottom + 4,
+              left: dropdownRect.left,
+              width: dropdownRect.width,
+              zIndex: 9999,
+            }}
+            className="rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1a1a2e] shadow-xl overflow-hidden py-1"
+          >
             {CURRENCIES.map((c) => (
-              <li key={c.value}
-                onMouseDown={(e) => { e.stopPropagation(); setCurrency(c.value); setCurrencyOpen(false); }}
-                className={`px-3 py-2 text-sm cursor-pointer select-none transition-colors ${currency === c.value ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}>
+              <li
+                key={c.value}
+                role="option"
+                aria-selected={currency === c.value}
+                onClick={() => { setCurrency(c.value); setCurrencyOpen(false); }}
+                className={`px-3 py-2.5 text-sm cursor-pointer select-none transition-colors ${
+                  currency === c.value
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
+                }`}
+              >
                 {c.label}
               </li>
             ))}
           </ul>,
           document.body
         )}
+
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
           Preview: {formatMoney(125000)} · {formatMoney(9999)}
         </p>
@@ -326,9 +374,11 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-400 dark:text-gray-500">Signed in</p>
           </div>
         </div>
+        <div className="mt-4 pt-4 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+          <span className="text-xs text-gray-400 dark:text-gray-500">Version</span>
+          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">v{__APP_VERSION__}</span>
+        </div>
       </div>
-
-      <ChangePasswordSection />
       <PreferencesSection />
       <BudgetAlertsSection />
       <DataSection />

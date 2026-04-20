@@ -18,6 +18,7 @@ import { generatePresignedUploadUrl, deleteReceiptByUrl } from '../services/stor
 import { scanReceipt } from '../services/receiptScan.service.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { env } from '../config/env.js';
+import { logger } from '../lib/logger.js';
 
 export const expenseRouter = Router();
 expenseRouter.use(requireAuth);
@@ -34,6 +35,11 @@ const upload = multer({
 
 // ─── Static routes (must come before /:id) ───────────────────────────────────
 
+// Validation schema for scan-receipt
+const ScanReceiptSchema = z.object({
+  // File is validated by multer, no body fields needed
+});
+
 // POST /expenses/scan-receipt — scan an image and extract expense data via Gemini
 expenseRouter.post(
   '/scan-receipt',
@@ -47,12 +53,26 @@ expenseRouter.post(
       res.status(400).json({ message: 'No image file provided.' });
       return;
     }
-    const result = await scanReceipt(req.file.buffer, req.file.mimetype);
-    if (!result) {
-      res.status(503).json({ message: 'Receipt scanning unavailable.' });
+    
+    // Validate file type more strictly
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      res.status(400).json({ message: 'Unsupported image format. Use JPEG, PNG, WebP, or GIF.' });
       return;
     }
-    res.json(result);
+    
+    try {
+      const result = await scanReceipt(req.file.buffer, req.file.mimetype);
+      if (!result) {
+        res.status(503).json({ message: 'Receipt scanning unavailable.' });
+        return;
+      }
+      logger.debug('Receipt scanned', { requestId: req.requestId, confidence: result.confidence });
+      res.json(result);
+    } catch (err) {
+      logger.error('Receipt scan failed', err, { requestId: req.requestId });
+      res.status(500).json({ message: 'Failed to scan receipt.' });
+    }
   },
 );
 
@@ -65,12 +85,29 @@ expenseRouter.post('/', async (req: Request, res: Response) => {
 
 // GET /expenses — list expenses with optional filters
 expenseRouter.get('/', async (req: Request, res: Response) => {
+  // Validate categoryIds as UUID array if present
+  let categoryIds: string[] | undefined;
+  if (req.query.categoryIds) {
+    const raw = Array.isArray(req.query.categoryIds) 
+      ? req.query.categoryIds 
+      : [req.query.categoryIds];
+    
+    // Validate each is a valid UUID
+    const uuidSchema = z.string().uuid();
+    const validated: string[] = [];
+    for (const id of raw) {
+      if (typeof id === 'string') {
+        const result = uuidSchema.safeParse(id);
+        if (result.success) validated.push(id);
+      }
+    }
+    categoryIds = validated.length > 0 ? validated : undefined;
+  }
+  
   const raw = {
     from: req.query.from,
     to: req.query.to,
-    categoryIds: req.query.categoryIds
-      ? (Array.isArray(req.query.categoryIds) ? req.query.categoryIds : [req.query.categoryIds])
-      : undefined,
+    categoryIds,
     page: req.query.page ? Number(req.query.page) : undefined,
     pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
     minAmount: req.query.minAmount ? Number(req.query.minAmount) : undefined,
@@ -125,8 +162,17 @@ expenseRouter.delete('/:id/receipt', async (req: Request, res: Response) => {
 
   try {
     await deleteReceiptByUrl(expense.receiptUrl);
-  } catch {
-    console.warn(`Failed to delete R2 object for expense ${expense.id}`);
+    logger.info('Receipt deleted from storage', { 
+      requestId: req.requestId, 
+      expenseId: expense.id 
+    });
+  } catch (err) {
+    logger.warn('Failed to delete R2 object', { 
+      requestId: req.requestId, 
+      expenseId: expense.id,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    // Continue anyway — we still want to clear the receiptUrl
   }
 
   const updated = await updateExpense(req.params.id, req.userId!, { receiptUrl: null });

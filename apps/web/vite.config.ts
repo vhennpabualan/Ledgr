@@ -13,6 +13,7 @@ export default defineConfig({
       devOptions: {
         enabled: true,
         type: 'module',
+        suppressWarnings: true,
       },
       manifest: {
         name: 'Ledgr',
@@ -44,7 +45,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: process.env.NODE_ENV === 'production'
+          ? ['**/*.{js,css,html,ico,png,svg,woff2}']
+          : [],
         runtimeCaching: [
           {
             // GET API calls — serve cache instantly, revalidate in background
@@ -73,7 +76,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@ledgr/types': path.resolve(__dirname, '../../packages/types/src/index.ts'),
+      '@': path.resolve(__dirname, './src'),
     },
+  },
+  define: {
+    // Injected at build time from package.json — bump "version" there to update
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
   },
   build: {
     outDir: 'dist',

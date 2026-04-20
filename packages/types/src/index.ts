@@ -26,6 +26,8 @@ export interface Expense {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** ID of recurring template that created this expense */
+  recurringId?: string | null;
 }
 
 // ─── Category ────────────────────────────────────────────────────────────────
@@ -261,6 +263,8 @@ export interface Income {
   label: string;
   createdAt: string;
   updatedAt: string;
+  /** ID of recurring template that created this income entry */
+  recurringId?: string | null;
 }
 
 export interface UpsertIncomeDTO {
@@ -294,4 +298,127 @@ export interface BalanceSummary {
   /** totalIncome - totalSpent - pendingTotal */
   remainingAfterPending: number;
   percentSpent: number;
+}
+
+// ─── Recurring Expenses ──────────────────────────────────────────────────────
+
+export type RecurringFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+
+export interface RecurringExpense {
+  id: string;
+  userId: string;
+  /** Positive integer in minor currency units */
+  amount: number;
+  currency: string;
+  categoryId: string;
+  description: string | null;
+  frequency: RecurringFrequency;
+  /** For monthly/yearly: day of month (1-31) */
+  dayOfMonth: number | null;
+  /** For weekly: day of week (0=Sunday, 6=Saturday) */
+  dayOfWeek: number | null;
+  /** For yearly: month of year (1-12) */
+  monthOfYear: number | null;
+  /** When this recurring expense starts */
+  startDate: string;
+  /** When this recurring expense ends (null = indefinite) */
+  endDate: string | null;
+  /** Next scheduled due date */
+  nextDueDate: string;
+  /** When the last expense was created */
+  lastRunAt: string | null;
+  /** Whether this recurring expense is paused */
+  isPaused: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRecurringDTO {
+  amount: number;
+  currency?: string;
+  categoryId: string;
+  description?: string;
+  frequency: RecurringFrequency;
+  dayOfMonth?: number;
+  dayOfWeek?: number;
+  monthOfYear?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export type UpdateRecurringDTO = Partial<CreateRecurringDTO> & {
+  isPaused?: boolean;
+};
+
+// ─── Recurring Income ─────────────────────────────────────────────────────────
+
+export type RecurringIncomeFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+
+export interface RecurringIncome {
+  id: string;
+  userId: string;
+  /** Positive integer in minor currency units */
+  amount: number;
+  currency: string;
+  label: string;
+  frequency: RecurringIncomeFrequency;
+  /** For weekly/biweekly: day of week (0=Sunday, 6=Saturday) */
+  dayOfWeek: number | null;
+  /** For monthly/yearly: day of month (1-31) */
+  dayOfMonth: number | null;
+  /** For yearly: month of year (1-12) */
+  monthOfYear: number | null;
+  /** When this recurring income starts */
+  startDate: string;
+  /** When this recurring income ends (null = indefinite) */
+  endDate: string | null;
+  /** Next scheduled due date */
+  nextDueDate: string;
+  /** When the last income entry was created */
+  lastRunAt: string | null;
+  /** Whether this recurring income is paused */
+  isPaused: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRecurringIncomeDTO {
+  amount: number;
+  currency?: string;
+  label?: string;
+  frequency: RecurringIncomeFrequency;
+  dayOfWeek?: number;
+  dayOfMonth?: number;
+  monthOfYear?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export type UpdateRecurringIncomeDTO = Partial<CreateRecurringIncomeDTO> & {
+  isPaused?: boolean;
+};
+
+// ─── Wallets ──────────────────────────────────────────────────────────────────
+
+export interface Wallet {
+  id: string;
+  userId: string;
+  name: string;
+  /** Balance in minor currency units (can be 0 or negative) */
+  balance: number;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWalletDTO {
+  name: string;
+  balance: number;
+  currency?: string;
+}
+
+export interface UpdateWalletDTO {
+  name?: string;
+  balance?: number;
+  currency?: string;
 }

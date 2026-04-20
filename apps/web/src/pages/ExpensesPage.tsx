@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { expensesApi, categoriesApi } from '../lib/api';
 import type { Expense, Category, PaginatedResult } from '@ledgr/types';
@@ -6,6 +7,8 @@ import ExpenseForm from '../components/ExpenseForm';
 import DatePicker from '../components/DatePicker';
 import BottomSheet from '../components/BottomSheet';
 import { useSettings } from '../contexts/SettingsContext';
+import { BrandLogo, getDomainFromLabel } from '../components/BrandLogo';
+import { useAnimatedDelete } from '../hooks/useAnimatedDelete';
 
 function formatDate(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -53,6 +56,14 @@ function ReceiptIcon() {
   );
 }
 
+function RecurringIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-label="Recurring expense">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
+
 // ─── Category badge ───────────────────────────────────────────────────────────
 
 function CategoryBadge({ category }: { category: Category | undefined }) {
@@ -71,9 +82,23 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
   expense: Expense; onCancel: () => void; onConfirm: () => void; isPending: boolean; error: string | null;
 }) {
   const { formatMoney } = useSettings();
-  return (
-    <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
+
+  // Close on Escape
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !isPending) onCancel(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isPending, onCancel]);
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-dialog-title"
+      // pb-24 clears the mobile bottom nav (≈80px + safe area)
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 pb-24 md:pb-4"
+    >
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={!isPending ? onCancel : undefined} aria-hidden="true" />
       <div className={`relative z-10 w-full max-w-sm ${glass} p-6`}>
         <h2 id="delete-dialog-title" className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete expense?</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">This action cannot be undone.</p>
@@ -83,16 +108,17 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
         {error && <p role="alert" className="mb-4 rounded-xl bg-red-50/80 dark:bg-red-900/20 border border-red-200/60 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onCancel} disabled={isPending}
-            className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 transition-colors focus:outline-none">
+            className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
             Cancel
           </button>
           <button type="button" onClick={onConfirm} disabled={isPending}
-            className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-40 transition-colors focus:outline-none">
+            className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
             {isPending ? 'Deleting…' : 'Delete'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -107,15 +133,31 @@ export default function ExpensesPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  const { exitingIds, triggerDelete: triggerDeleteExpense } = useAnimatedDelete(['expenses']);
+
+  function deleteExpense(id: string) {
+    triggerDeleteExpense(id, async () => {
+      await expensesApi.delete(id);
+      queryClient.refetchQueries({ queryKey: ['dashboard-recent'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-trend'] });
+    });
+  }
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => expensesApi.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['expenses'] }); setDeletingExpense(null); setDeleteError(null); },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['expenses'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-recent'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-trend'] });
+      setDeletingExpense(null); setDeleteError(null);
+    },
     onError: (err: unknown) => setDeleteError(err instanceof Error ? err.message : 'Failed to delete expense.'),
   });
 
   function openEdit(expense: Expense) { setEditingExpense(expense); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditingExpense(undefined); }
-  function openDelete(e: React.MouseEvent, expense: Expense) { e.stopPropagation(); setDeleteError(null); setDeletingExpense(expense); }
   function closeDelete() { if (deleteMutation.isPending) return; setDeletingExpense(null); setDeleteError(null); }
 
   const { data: expensesData, isLoading: expensesLoading, isError: expensesError, refetch } = useQuery<PaginatedResult<Expense>>({
@@ -170,7 +212,7 @@ export default function ExpensesPage() {
             )}
             <button type="button" onClick={() => { setEditingExpense(undefined); setShowForm(true); }}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
-              + Add Expense
+              + Add
             </button>
           </div>
         </div>
@@ -225,7 +267,14 @@ export default function ExpensesPage() {
           </div>
         ) : !expensesData?.data.length ? (
           <div className="px-4 py-16 text-center">
-            <p className="text-sm text-gray-400 dark:text-gray-500">No expenses found. Try adjusting your filters.</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mb-1">No expenses found.</p>
+            {hasActiveFilters
+              ? <p className="text-xs text-gray-400 dark:text-gray-500">Try adjusting or clearing your filters.</p>
+              : <button type="button" onClick={() => { setEditingExpense(undefined); setShowForm(true); }}
+                  className="mt-1 text-sm text-indigo-500 dark:text-indigo-400 hover:underline focus:outline-none">
+                  Add your first expense
+                </button>
+            }
           </div>
         ) : (
           <>
@@ -250,7 +299,7 @@ export default function ExpensesPage() {
                     </tr>
                     {items.map((expense) => (
                       <tr key={expense.id} onClick={() => openEdit(expense)}
-                        className="group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                        className={`group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors ${exitingIds.has(expense.id) ? 'item-exit' : 'item-enter'}`}
                         tabIndex={0} role="button"
                         aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}>
@@ -259,6 +308,7 @@ export default function ExpensesPage() {
                         <td className="px-4 py-3 text-gray-700 dark:text-gray-200 max-w-xs">
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="truncate">{expense.description ?? <span className="text-gray-400">—</span>}</span>
+                            {expense.recurringId && <RecurringIcon />}
                             {expense.receiptUrl && <ReceiptIcon />}
                           </div>
                         </td>
@@ -266,7 +316,7 @@ export default function ExpensesPage() {
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
                             <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Edit</span>
-                            <button type="button" onClick={(e) => openDelete(e, expense)}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); deleteExpense(expense.id); }}
                               className="rounded-lg p-1 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-all focus:outline-none"
                               aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -300,17 +350,26 @@ export default function ExpensesPage() {
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
                   </li>
                   {items.map((expense) => (
-                    <li key={expense.id} className="relative">
+                    <li key={expense.id} className={`relative ${exitingIds.has(expense.id) ? 'item-exit' : 'item-enter'}`}>
                       <div role="button" tabIndex={0} onClick={() => openEdit(expense)}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:bg-black/[0.04] dark:active:bg-white/[0.04] transition-colors cursor-pointer"
                         aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}>
-                        <span className="text-xl shrink-0" aria-hidden="true">{categoryMap.get(expense.categoryId)?.icon ?? '💸'}</span>
+                        {expense.description && getDomainFromLabel(expense.description)
+                          ? <BrandLogo label={expense.description} size={36} className="shrink-0" />
+                          : <span
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white/90 border border-black/[0.07] dark:border-white/[0.10] shadow-sm shadow-black/[0.04] text-lg"
+                              aria-hidden="true"
+                            >
+                              {categoryMap.get(expense.categoryId)?.icon ?? '💸'}
+                            </span>
+                        }
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
                               {expense.description ?? categoryMap.get(expense.categoryId)?.name ?? '—'}
                             </p>
+                            {expense.recurringId && <RecurringIcon />}
                             {expense.receiptUrl && <ReceiptIcon />}
                           </div>
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
@@ -319,8 +378,8 @@ export default function ExpensesPage() {
                         </div>
                         <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tabular-nums pr-10">{formatMoney(expense.amount)}</span>
                       </div>
-                      <button type="button" onClick={(e) => openDelete(e, expense)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-colors focus:outline-none"
+                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteExpense(expense.id); }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-gray-300 dark:text-gray-600 active:text-red-500 active:bg-red-50/80 dark:active:bg-red-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                         aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                           <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />

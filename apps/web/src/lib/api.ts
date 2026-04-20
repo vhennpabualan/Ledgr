@@ -19,6 +19,15 @@ import type {
   Income,
   UpsertIncomeDTO,
   BalanceSummary,
+  RecurringExpense,
+  CreateRecurringDTO,
+  UpdateRecurringDTO,
+  Wallet,
+  CreateWalletDTO,
+  UpdateWalletDTO,
+  RecurringIncome,
+  CreateRecurringIncomeDTO,
+  UpdateRecurringIncomeDTO,
 } from '@ledgr/types';
 
 // ─── Token store ──────────────────────────────────────────────────────────────
@@ -246,4 +255,74 @@ export const accountApi = {
 
   deleteAccount: (data: { password: string }) =>
     api.delete('/auth/account', { data }),
+};
+
+// ─── Recurring Expenses ───────────────────────────────────────────────────────
+
+export const recurringApi = {
+  list: () =>
+    api.get<RecurringExpense[]>('/recurring'),
+
+  create: (data: CreateRecurringDTO) =>
+    api.post<RecurringExpense>('/recurring', data),
+
+  get: (id: string) =>
+    api.get<RecurringExpense>(`/recurring/${id}`),
+
+  update: (id: string, data: UpdateRecurringDTO) =>
+    api.patch<RecurringExpense>(`/recurring/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete(`/recurring/${id}`),
+
+  toggle: (id: string, isPaused: boolean) =>
+    api.post<RecurringExpense>(`/recurring/${id}/toggle`, { isPaused }),
+};
+
+// ─── Wallets ──────────────────────────────────────────────────────────────────
+
+export const walletsApi = {
+  list: () =>
+    api.get<Wallet[]>('/wallets'),
+
+  create: (data: CreateWalletDTO) =>
+    api.post<Wallet>('/wallets', data),
+
+  update: (id: string, data: UpdateWalletDTO) =>
+    api.patch<Wallet>(`/wallets/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete(`/wallets/${id}`),
+};
+
+// ─── Recurring Income ─────────────────────────────────────────────────────────
+
+export const recurringIncomeApi = {
+  list: () =>
+    api.get<RecurringIncome[]>('/recurring-income'),
+
+  create: (data: CreateRecurringIncomeDTO) =>
+    api.post<RecurringIncome>('/recurring-income', data),
+
+  get: (id: string) =>
+    api.get<RecurringIncome>(`/recurring-income/${id}`),
+
+  update: (id: string, data: UpdateRecurringIncomeDTO) =>
+    api.patch<RecurringIncome>(`/recurring-income/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete(`/recurring-income/${id}`),
+
+  preview: (params: {
+    frequency: string;
+    startDate: string;
+    dayOfWeek?: number;
+    dayOfMonth?: number;
+    monthOfYear?: number;
+    count?: number;
+  }) =>
+    api.get<{ dates: string[] }>('/recurring-income/preview', { params }),
+
+  process: () =>
+    api.post<{ created: number }>('/recurring-income/process'),
 };

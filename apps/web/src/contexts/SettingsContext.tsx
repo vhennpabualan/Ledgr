@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type Currency = 'PHP' | 'USD' | 'EUR' | 'GBP' | 'JPY' | 'SGD';
@@ -27,6 +27,22 @@ const DEFAULTS: Settings = {
 const CURRENCY_LOCALES: Record<Currency, string> = {
   PHP: 'en-PH', USD: 'en-US', EUR: 'de-DE', GBP: 'en-GB', JPY: 'ja-JP', SGD: 'en-SG',
 };
+
+// Cache formatters per currency to avoid recreating on every call
+const formatterCache = new Map<Currency, Intl.NumberFormat>();
+
+function getFormatter(currency: Currency): Intl.NumberFormat {
+  let formatter = formatterCache.get(currency);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(CURRENCY_LOCALES[currency], {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'symbol',
+    });
+    formatterCache.set(currency, formatter);
+  }
+  return formatter;
+}
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
@@ -92,13 +108,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }
 
-  function formatMoney(minorUnits: number): string {
-    return new Intl.NumberFormat(CURRENCY_LOCALES[settings.currency], {
-      style: 'currency',
-      currency: settings.currency,
-      currencyDisplay: 'symbol',
-    }).format(minorUnits / 100);
-  }
+  // Memoize formatMoney to return a stable function per currency
+  const formatMoney = useMemo(() => {
+    return (minorUnits: number): string => {
+      return getFormatter(settings.currency).format(minorUnits / 100);
+    };
+  }, [settings.currency]);
 
   return (
     <SettingsContext.Provider value={{

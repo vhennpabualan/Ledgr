@@ -22,6 +22,7 @@ export function rowToExpense(row: Record<string, unknown>): Expense {
     description: row.description as string | null,
     receiptUrl: row.receipt_url as string | null,
     splits: [], // always empty in v1
+    recurringId: row.recurring_id as string | null,
     deletedAt: row.deleted_at != null
       ? (row.deleted_at as Date).toISOString()
       : null,
@@ -62,6 +63,7 @@ export async function appendLedgerEntry(
 export async function createExpense(
   userId: string,
   input: CreateExpenseInput,
+  recurringId?: string,
 ): Promise<Expense> {
   const { amount, date, categoryId, description, receiptUrl } = input;
   const currency = input.currency ?? 'PHP';
@@ -85,8 +87,8 @@ export async function createExpense(
 
     const { rows } = await client.query(
       `INSERT INTO expenses
-         (user_id, amount, currency, date, category_id, description, receipt_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (user_id, amount, currency, date, category_id, description, receipt_url, recurring_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         userId,
@@ -96,6 +98,7 @@ export async function createExpense(
         categoryId,
         description ?? null,
         receiptUrl ?? null,
+        recurringId ?? null,
       ],
     );
 

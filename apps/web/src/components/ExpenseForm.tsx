@@ -107,7 +107,10 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.refetchQueries({ queryKey: ['expenses'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-recent'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.refetchQueries({ queryKey: ['dashboard-trend'] });
       onSuccess();
     },
     onError: (err: unknown) => {
@@ -205,17 +208,16 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
       {/* Currency */}
       <div>
         <label htmlFor="ef-currency" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Currency</label>
-        <input
+        <select
           id="ef-currency"
-          type="text"
-          maxLength={3}
-          placeholder="PHP"
           value={form.currency}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase().slice(0, 3) }))
-          }
+          onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))}
           className={inputClass()}
-        />
+        >
+          {(['PHP', 'USD', 'EUR', 'GBP', 'JPY', 'SGD'] as const).map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
       </div>
 
       {/* Date */}
@@ -355,7 +357,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
                 try {
                   await expensesApi.deleteReceipt(expense.id);
                   setReceiptDeleted(true);
-                  queryClient.invalidateQueries({ queryKey: ['expenses'] });
+                  queryClient.refetchQueries({ queryKey: ['expenses'] });
                 } catch {
                   setErrors((prev) => ({ ...prev, receipt: 'Failed to delete receipt. Try again.' }));
                 } finally {

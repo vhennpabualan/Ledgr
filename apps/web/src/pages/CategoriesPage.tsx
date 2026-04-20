@@ -328,7 +328,6 @@ export default function CategoriesPage() {
 
   function openEdit(c: Category) { setEditingCategory(c); setShowForm(true); }
   function closeForm() { setShowForm(false); setEditingCategory(undefined); }
-  function openDelete(c: Category) { setDeleteError(null); setDeletingCategory(c); }
   function closeDelete() { if (deleteMutation.isPending) return; setDeletingCategory(null); setDeleteError(null); }
 
   return (

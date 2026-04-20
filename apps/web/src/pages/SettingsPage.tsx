@@ -379,6 +379,7 @@ export default function SettingsPage() {
           <span className="text-xs font-mono text-gray-500 dark:text-gray-400">v{__APP_VERSION__}</span>
         </div>
       </div>
+      <ChangePasswordSection />
       <PreferencesSection />
       <BudgetAlertsSection />
       <DataSection />

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateBudgetSchema } from '@ledgr/types';
-import { createBudget, listBudgets, getBudgetStatus, deleteBudget } from '../services/budget.service.js';
+import { createBudget, listBudgets, getBudgetStatus, deleteBudget, copyBudgets } from '../services/budget.service.js';
 import { listPendingSpend, createPendingSpend, deletePendingSpend } from '../services/pendingSpend.service.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -44,6 +44,20 @@ budgetRouter.get('/:id/status', async (req: Request, res: Response) => {
 budgetRouter.delete('/:id', async (req: Request, res: Response) => {
   await deleteBudget(req.params.id, req.userId!);
   res.status(204).send();
+});
+
+const CopyBudgetsSchema = z.object({
+  fromYear: z.coerce.number().int().min(2000),
+  fromMonth: z.coerce.number().int().min(1).max(12),
+  toYear: z.coerce.number().int().min(2000),
+  toMonth: z.coerce.number().int().min(1).max(12),
+});
+
+// POST /budgets/copy — copy budgets from one period to another
+budgetRouter.post('/copy', async (req: Request, res: Response) => {
+  const { fromYear, fromMonth, toYear, toMonth } = CopyBudgetsSchema.parse(req.body);
+  const created = await copyBudgets(req.userId!, fromYear, fromMonth, toYear, toMonth);
+  res.status(201).json({ created: created.length, budgets: created });
 });
 
 // GET /budgets/:id/pending — list pending spend items

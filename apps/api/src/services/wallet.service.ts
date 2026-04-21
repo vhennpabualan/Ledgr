@@ -53,3 +53,21 @@ export async function deleteWallet(id: string, userId: string): Promise<void> {
   );
   if (!rowCount) throw new AppError(404, 'Wallet not found');
 }
+
+/**
+ * adjustWalletBalance — adds `delta` (negative to deduct) to a wallet's balance.
+ * Must be called inside an existing transaction via the provided client.
+ */
+export async function adjustWalletBalance(
+  client: import('pg').PoolClient,
+  walletId: string,
+  userId: string,
+  delta: number,
+): Promise<void> {
+  const { rowCount } = await client.query(
+    `UPDATE wallets SET balance = balance + $1, updated_at = NOW()
+     WHERE id = $2 AND user_id = $3`,
+    [delta, walletId, userId],
+  );
+  if (!rowCount) throw new AppError(404, 'Wallet not found');
+}

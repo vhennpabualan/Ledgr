@@ -345,78 +345,86 @@ function RecurringIncomeRow({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <div
-      className={`flex items-center gap-4 py-3 px-4 border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 transition-opacity ${
-        item.isPaused ? 'opacity-50' : ''
-      }`}
-    >
-      <BrandLogo label={item.label} size={36} className="shrink-0" />
+    <div className={`${glass} p-4 flex gap-3 transition-opacity ${item.isPaused ? 'opacity-60' : ''}`}>
+      {/* Logo */}
+      <BrandLogo label={item.label} size={40} className="shrink-0 mt-0.5" />
 
+      {/* Main content */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{item.label}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500">
-          {formatFrequency(item)} · Next: {formatNextDue(item.nextDueDate)}
-        </p>
-      </div>
-
-      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
-        +{formatMoney(item.amount)}
-      </span>
-
-      {confirmDelete ? (
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">Delete?</span>
-          <button
-            type="button"
-            onClick={() => { setConfirmDelete(false); onDelete(); }}
-            className="rounded-lg px-2.5 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 transition-colors focus:outline-none"
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(false)}
-            className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-black/10 dark:border-white/10 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors focus:outline-none"
-          >
-            No
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1 shrink-0">
+        {/* Name + status pill */}
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate leading-snug">
+            {item.label}
+          </p>
           <button
             type="button"
             onClick={onToggle}
-            className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors focus:outline-none ${
-              item.isPaused
-                ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50/80 dark:hover:bg-amber-900/20'
-                : 'text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
-            }`}
             aria-label={item.isPaused ? 'Resume' : 'Pause'}
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+              item.isPaused
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 focus-visible:ring-amber-400'
+                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 focus-visible:ring-emerald-400'
+            }`}
           >
             {item.isPaused ? 'Paused' : 'Active'}
           </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-lg p-1.5 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50/80 dark:hover:bg-indigo-900/20 transition-colors focus:outline-none"
-            aria-label={`Edit ${item.label}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50/80 dark:hover:bg-red-900/20 transition-colors focus:outline-none"
-            aria-label={`Delete ${item.label}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-          </button>
         </div>
-      )}
+
+        {/* Frequency */}
+        <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500 truncate">
+          {formatFrequency(item)} · Next: {formatNextDue(item.nextDueDate)}
+        </p>
+
+        {/* Amount + actions */}
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          <span className="text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            +{formatMoney(item.amount)}
+          </span>
+
+          {confirmDelete ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Remove?</span>
+              <button
+                type="button"
+                onClick={() => { setConfirmDelete(false); onDelete(); }}
+                className="rounded-lg px-2.5 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 transition-colors focus:outline-none"
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-black/10 dark:border-white/10 hover:bg-black/[0.04] transition-colors focus:outline-none"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-lg p-1.5 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50/80 dark:hover:bg-indigo-900/20 transition-colors focus:outline-none"
+                aria-label={`Edit ${item.label}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50/80 dark:hover:bg-red-900/20 transition-colors focus:outline-none"
+                aria-label={`Delete ${item.label}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -481,59 +489,56 @@ export default function RecurringIncomePage() {
       </div>
 
       {/* List */}
-      <div className={`${glass} overflow-hidden`}>
-        {isLoading ? (
-          <div className="divide-y divide-black/[0.05]">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 py-3 px-4">
-                <Skeleton className="h-9 w-9 rounded-xl" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-48" />
-                </div>
-                <Skeleton className="h-4 w-16" />
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className={`${glass} p-4 flex gap-3`} aria-hidden="true">
+              <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-48" />
+                <Skeleton className="h-5 w-24 mt-1" />
               </div>
-            ))}
-          </div>
-        ) : isError ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Failed to load recurring income.</p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="px-4 py-16 text-center">
-            <p className="text-sm text-gray-400 dark:text-gray-500 mb-1">No recurring income yet.</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-              Add your salary, freelance retainer, or any regular income.
-            </p>
-            <button
-              type="button"
-              onClick={openCreate}
-              className="text-sm text-emerald-500 dark:text-emerald-400 hover:underline focus:outline-none"
-            >
-              Add your first one
-            </button>
-          </div>
-        ) : (
-          <div>
-            {items.map((item) => (
-              <RecurringIncomeRow
-                key={item.id}
-                item={item}
-                onEdit={() => openEdit(item)}
-                onToggle={() => toggleMutation.mutate({ id: item.id, isPaused: !item.isPaused })}
-                onDelete={() => deleteMutation.mutate(item.id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      ) : isError ? (
+        <div className={`${glass} px-4 py-12 text-center`}>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Failed to load recurring income.</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      ) : items.length === 0 ? (
+        <div className={`${glass} px-4 py-16 text-center border-dashed`}>
+          <p className="text-2xl mb-3">💰</p>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">No recurring income yet.</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">Add your salary, freelance retainer, or any regular income.</p>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="text-sm text-emerald-500 dark:text-emerald-400 hover:underline focus:outline-none"
+          >
+            Add your first one
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <RecurringIncomeRow
+              key={item.id}
+              item={item}
+              onEdit={() => openEdit(item)}
+              onToggle={() => toggleMutation.mutate({ id: item.id, isPaused: !item.isPaused })}
+              onDelete={() => deleteMutation.mutate(item.id)}
+            />
+          ))}
+        </div>
+      )}
 
       <BottomSheet
         open={showForm}

@@ -9,6 +9,11 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 function formatMonthYear(year: number, month: number): string { return `${MONTH_NAMES[month - 1]} ${year}`; }
 function extractError(err: unknown): string { return err instanceof Error ? err.message : 'Something went wrong.'; }
 
+/** Returns { year, month } for the month before the given one */
+function prevMonthOf(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
 const glass = 'rounded-2xl border border-white/70 bg-white/50 backdrop-blur-md shadow-sm shadow-black/[0.06] dark:border-white/[0.08] dark:bg-white/[0.04]';
 
 // ─── Budget card ──────────────────────────────────────────────────────────────
@@ -441,6 +446,21 @@ export default function BudgetsPage() {
     },
   });
 
+  const prev = prevMonthOf(year, month);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState<number | null>(null);
+
+  const copyMutation = useMutation({
+    mutationFn: () => budgetsApi.copy(prev.year, prev.month, year, month),
+    onSuccess: ({ data }) => {
+      queryClient.refetchQueries({ queryKey: ['budgets', year, month] });
+      setCopySuccess(data.created);
+      setCopyError(null);
+      setTimeout(() => setCopySuccess(null), 3000);
+    },
+    onError: () => setCopyError('Failed to copy budgets. Try again.'),
+  });
+
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); } else { setMonth((m) => m - 1); }
   }
@@ -485,11 +505,40 @@ export default function BudgetsPage() {
           </button>
         </div>
 
-        <button type="button" onClick={() => setShowForm(true)}
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
-          + Add
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => { setCopyError(null); copyMutation.mutate(); }}
+            disabled={copyMutation.isPending}
+            title={`Copy budgets from ${formatMonthYear(prev.year, prev.month)}`}
+            className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 transition-colors focus:outline-none flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+              <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+            </svg>
+            {copyMutation.isPending ? 'Copying…' : 'Copy last month'}
+          </button>
+          <button type="button" onClick={() => setShowForm(true)}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
+            + Add
+          </button>
+        </div>
       </div>
+
+      {/* Copy feedback */}
+      {copySuccess !== null && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200/60 bg-emerald-50/60 dark:bg-emerald-900/20 px-4 py-2.5" role="status">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm text-emerald-700 dark:text-emerald-400">
+            {copySuccess === 0
+              ? 'All budgets already exist for this month.'
+              : `${copySuccess} budget${copySuccess !== 1 ? 's' : ''} copied from ${formatMonthYear(prev.year, prev.month)}.`}
+          </p>
+        </div>
+      )}
+      {copyError && (
+        <p role="alert" className="text-sm text-red-500 dark:text-red-400">{copyError}</p>
+      )}
 
       {/* Content */}
       {budgetsLoading ? (

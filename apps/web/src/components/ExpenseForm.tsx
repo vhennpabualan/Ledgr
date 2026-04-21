@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { expensesApi, categoriesApi } from '../lib/api';
-import type { Expense, Category, CreateExpenseDTO } from '@ledgr/types';
+import { expensesApi, categoriesApi, walletsApi } from '../lib/api';
+import type { Expense, Category, CreateExpenseDTO, Wallet } from '@ledgr/types';
 import DatePicker, { todayISO } from './DatePicker';
 
 interface ExpenseFormProps {
@@ -17,6 +17,7 @@ interface FormState {
   categoryId: string;
   description: string;
   receiptFile: File | null;
+  walletId: string; // '' = no wallet selected
 }
 
 interface FormErrors {
@@ -44,6 +45,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
     categoryId: expense?.categoryId ?? '',
     description: expense?.description ?? '',
     receiptFile: null,
+    walletId: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -64,6 +66,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
         categoryId: expense.categoryId,
         description: expense.description ?? '',
         receiptFile: null,
+        walletId: '',
       });
       setReceiptDeleted(false);
     }
@@ -76,8 +79,16 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
     staleTime: 30 * 60 * 1000,
   });
 
+  // Wallets — only needed on create (editing doesn't re-deduct)
+  const { data: wallets = [] } = useQuery<Wallet[]>({
+    queryKey: ['wallets'],
+    queryFn: () => walletsApi.list().then((r) => r.data),
+    enabled: !isEdit,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const mutation = useMutation({
-    mutationFn: (payload: CreateExpenseDTO) =>
+    mutationFn: (payload: CreateExpenseDTO & { walletId?: string }) =>
       isEdit
         ? expensesApi.update(expense!.id, payload).then((r) => r.data)
         : expensesApi.create(payload).then((r) => r.data),
@@ -111,8 +122,9 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
       queryClient.refetchQueries({ queryKey: ['dashboard-recent'] });
       queryClient.refetchQueries({ queryKey: ['dashboard-summary'] });
       queryClient.refetchQueries({ queryKey: ['dashboard-trend'] });
-      onSuccess();
-    },
+      // Refresh wallets if one was deducted
+      if (form.walletId) queryClient.refetchQueries({ queryKey: ['wallets'] });
+      onSuccess();    },
     onError: (err: unknown) => {
       const message =
         err instanceof Error ? err.message : 'Something went wrong. Please try again.';
@@ -148,12 +160,13 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
     e.preventDefault();
     if (!validate()) return;
 
-    const payload: CreateExpenseDTO = {
+    const payload: CreateExpenseDTO & { walletId?: string } = {
       amount: Math.round(parseFloat(form.amount) * 100),
       currency: form.currency.toUpperCase().slice(0, 3) || 'PHP',
       date: form.date,
       categoryId: form.categoryId,
       ...(form.description.trim() ? { description: form.description.trim() } : {}),
+      ...(!isEdit && form.walletId ? { walletId: form.walletId } : {}),
     };
 
     mutation.mutate(payload);
@@ -322,6 +335,33 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
         </p>
       </div>
 
+      {/* Wallet deduction — only on create, only if wallets exist */}
+      {!isEdit && wallets.length > 0 && (
+        <div>
+          <label htmlFor="ef-wallet" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            Deduct from account <span className="font-normal text-gray-400 dark:text-gray-500">(optional)</span>
+          </label>
+          <select
+            id="ef-wallet"
+            value={form.walletId}
+            onChange={(e) => setForm((prev) => ({ ...prev, walletId: e.target.value }))}
+            className={inputClass()}
+          >
+            <option value="">— None —</option>
+            {wallets.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name} ({w.currency} {(w.balance / 100).toLocaleString()})
+              </option>
+            ))}
+          </select>
+          {form.walletId && (
+            <p className="mt-1 text-xs text-indigo-500 dark:text-indigo-400">
+              Balance will be reduced by {form.amount ? `${form.currency} ${parseFloat(form.amount || '0').toLocaleString()}` : 'the entered amount'} on save.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Receipt */}
       <div>
         <label htmlFor="ef-receipt" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -408,8 +448,14 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
                     setScanApplied(true);
                   }
                 })
-                .catch(() => {
-                  // Scan failed silently — user can fill in manually
+                .catch((err: unknown) => {
+                  // Surface 503 explicitly — means GEMINI_API_KEY is not configured on the server
+                  const status = (err as { response?: { status?: number; data?: { message?: string } } })?.response?.status;
+                  const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                  if (status === 503) {
+                    setErrors((prev) => ({ ...prev, receipt: msg ?? 'Receipt scanning is not available on this server.' }));
+                  }
+                  // Other failures (network, 500) are silent — user fills in manually
                 })
                 .finally(() => setScanning(false));
             }

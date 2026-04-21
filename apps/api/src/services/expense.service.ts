@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { pool } from '../db/client.js';
 import { AppError } from '../lib/errors.js';
+import { adjustWalletBalance } from './wallet.service.js';
 import type { Expense, LedgerEntry, PaginatedResult } from '@ledgr/types';
 import type { CreateExpenseInput, UpdateExpenseInput, ExpenseFiltersInput } from '@ledgr/types';
 
@@ -64,6 +65,7 @@ export async function createExpense(
   userId: string,
   input: CreateExpenseInput,
   recurringId?: string,
+  walletId?: string,
 ): Promise<Expense> {
   const { amount, date, categoryId, description, receiptUrl } = input;
   const currency = input.currency ?? 'PHP';
@@ -79,7 +81,7 @@ export async function createExpense(
     throw new AppError(400, 'Invalid category');
   }
 
-  // ── 2. Transaction: INSERT expense → INSERT ledger entry ──────────────────
+  // ── 2. Transaction: INSERT expense → deduct wallet (optional) → INSERT ledger entry ──
   const client = await pool.connect();
 
   try {
@@ -104,6 +106,11 @@ export async function createExpense(
 
     const expense = rowToExpense(rows[0] as Record<string, unknown>);
 
+    // Deduct from wallet if specified — negative delta = deduction
+    if (walletId) {
+      await adjustWalletBalance(client, walletId, userId, -amount);
+    }
+
     // Full snapshot as diff on create
     const diff: Record<string, unknown> = {
       id: expense.id,
@@ -118,6 +125,7 @@ export async function createExpense(
       deletedAt: expense.deletedAt,
       createdAt: expense.createdAt,
       updatedAt: expense.updatedAt,
+      ...(walletId ? { walletId } : {}),
     };
 
     await appendLedgerEntry(client, 'expense', expense.id, 'create', userId, diff);

@@ -422,3 +422,48 @@ export interface UpdateWalletDTO {
   balance?: number;
   currency?: string;
 }
+
+// ─── Money formatting ─────────────────────────────────────────────────────────
+
+export type SupportedCurrency = 'PHP' | 'USD' | 'EUR' | 'GBP' | 'JPY' | 'SGD';
+
+const CURRENCY_LOCALES: Record<SupportedCurrency, string> = {
+  PHP: 'en-PH',
+  USD: 'en-US',
+  EUR: 'de-DE',
+  GBP: 'en-GB',
+  JPY: 'ja-JP',
+  SGD: 'en-SG',
+};
+
+// Cache formatters — Intl.NumberFormat construction is expensive
+const _formatterCache = new Map<SupportedCurrency, Intl.NumberFormat>();
+
+function _getFormatter(currency: SupportedCurrency): Intl.NumberFormat {
+  let f = _formatterCache.get(currency);
+  if (!f) {
+    f = new Intl.NumberFormat(CURRENCY_LOCALES[currency], {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'symbol',
+    });
+    _formatterCache.set(currency, f);
+  }
+  return f;
+}
+
+/**
+ * Format an amount stored in minor currency units (e.g. centavos) as a
+ * human-readable currency string.
+ *
+ * @param minorUnits - integer amount in minor units (e.g. 12345 = ₱123.45)
+ * @param currency   - ISO 4217 code; defaults to 'PHP'
+ *
+ * @example
+ *   formatMoney(12345)         // "₱123.45"
+ *   formatMoney(9900, 'USD')   // "$99.00"
+ */
+export function formatMoney(minorUnits: number, currency: SupportedCurrency = 'PHP'): string {
+  return _getFormatter(currency).format(minorUnits / 100);
+}
+

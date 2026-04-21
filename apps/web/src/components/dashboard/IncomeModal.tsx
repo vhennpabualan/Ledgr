@@ -115,7 +115,9 @@ function AddForm({ year, month, onAdded }: AddFormProps) {
       return recurringIncomeApi.create(dto);
     },
     onSuccess: async () => {
-      // Process immediately so the entry appears in this month's list right away
+      // Process immediately so the new schedule's first entry appears in this month's list.
+      // The modal-open effect has already run at this point (on mount), so this is the
+      // only process() call in flight — no race condition.
       await recurringIncomeApi.process();
       queryClient.refetchQueries({ queryKey: ['income-entries', year, month] });
       queryClient.refetchQueries({ queryKey: ['recurring-income'] });
@@ -358,7 +360,10 @@ export default function IncomeModal({ year, month, onClose }: IncomeModalProps) 
     return () => { document.body.style.overflow = ''; };
   }, []);
 
-  // Auto-process any due recurring income when modal opens
+  // On mount: process any schedules that became due since the last visit,
+  // then refresh the entry list and balance. This handles pre-existing schedules.
+  // When a NEW schedule is created via AddForm, addRecurring.onSuccess calls process()
+  // separately — that's safe because the mount effect has already completed by then.
   useEffect(() => {
     recurringIncomeApi.process().then(() => {
       queryClient.refetchQueries({ queryKey: ['income-entries', year, month] });

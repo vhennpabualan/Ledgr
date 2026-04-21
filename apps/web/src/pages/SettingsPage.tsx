@@ -9,6 +9,22 @@ import { useSettings, type ThemePreference, type Currency } from '../contexts/Se
 const glass = 'rounded-2xl border border-white/70 bg-white/50 backdrop-blur-md shadow-sm shadow-black/[0.06] dark:border-white/[0.08] dark:bg-white/[0.04]';
 const inputCls = 'w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] dark:text-gray-100 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors placeholder:text-gray-400';
 const sectionTitle = 'text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-4';
+const divider = 'border-t border-black/[0.06] dark:border-white/[0.06] my-5';
+
+// ─── Password strength ────────────────────────────────────────────────────────
+
+function passwordStrength(pw: string): { score: number; label: string; color: string } {
+  if (!pw) return { score: 0, label: '', color: '' };
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { score, label: 'Weak', color: 'bg-red-400' };
+  if (score <= 3) return { score, label: 'Fair', color: 'bg-amber-400' };
+  return { score, label: 'Strong', color: 'bg-emerald-400' };
+}
 
 // ─── Change password ──────────────────────────────────────────────────────────
 
@@ -18,6 +34,8 @@ function ChangePasswordSection() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const strength = passwordStrength(next);
 
   const mutation = useMutation({
     mutationFn: () => accountApi.changePassword({ currentPassword: current, newPassword: next }),
@@ -34,32 +52,51 @@ function ChangePasswordSection() {
   }
 
   return (
-    <div className={`${glass} p-5`}>
-      <h2 className={sectionTitle}>Change Password</h2>
-      <form onSubmit={handleSubmit} className="space-y-3 max-w-sm">
-        <div>
-          <label htmlFor="cp-current" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current password</label>
-          <input id="cp-current" type="password" placeholder="Current password" value={current}
-            onChange={(e) => setCurrent(e.target.value)} className={inputCls} autoComplete="current-password" />
-        </div>
-        <div>
-          <label htmlFor="cp-new" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">New password</label>
-          <input id="cp-new" type="password" placeholder="Min 8 characters" value={next}
-            onChange={(e) => setNext(e.target.value)} className={inputCls} autoComplete="new-password" />
-        </div>
-        <div>
-          <label htmlFor="cp-confirm" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Confirm new password</label>
-          <input id="cp-confirm" type="password" placeholder="Confirm new password" value={confirm}
-            onChange={(e) => setConfirm(e.target.value)} className={inputCls} autoComplete="new-password" />
-        </div>
-        {error && <p className="text-xs text-red-500 dark:text-red-400" role="alert">{error}</p>}
-        {success && <p className="text-xs text-emerald-600 dark:text-emerald-400" role="status">Password changed successfully.</p>}
-        <button type="submit" disabled={mutation.isPending || !current || !next || !confirm}
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
-          {mutation.isPending ? 'Saving…' : 'Update password'}
-        </button>
-      </form>
-    </div>
+    <>
+      <hr className={divider} />
+      <div>
+        <h2 className={sectionTitle}>Change Password</h2>
+        <form onSubmit={handleSubmit} className="space-y-3 max-w-sm">
+          <div>
+            <label htmlFor="cp-current" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current password</label>
+            <input id="cp-current" type="password" placeholder="Current password" value={current}
+              onChange={(e) => setCurrent(e.target.value)} className={inputCls} autoComplete="current-password" />
+          </div>
+          <div>
+            <label htmlFor="cp-new" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">New password</label>
+            <input id="cp-new" type="password" placeholder="Min 8 characters" value={next}
+              onChange={(e) => { setNext(e.target.value); setSuccess(false); }} className={inputCls} autoComplete="new-password" />
+            {/* Strength meter */}
+            {next.length > 0 && (
+              <div className="mt-1.5 space-y-1">
+                <div className="flex gap-1">
+                  {[1,2,3,4,5].map((i) => (
+                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strength.score ? strength.color : 'bg-black/[0.08] dark:bg-white/[0.08]'}`} />
+                  ))}
+                </div>
+                <p className={`text-[11px] font-medium ${strength.score <= 1 ? 'text-red-500' : strength.score <= 3 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {strength.label}
+                </p>
+              </div>
+            )}
+          </div>
+          <div>
+            <label htmlFor="cp-confirm" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Confirm new password</label>
+            <input id="cp-confirm" type="password" placeholder="Confirm new password" value={confirm}
+              onChange={(e) => setConfirm(e.target.value)} className={inputCls} autoComplete="new-password" />
+            {confirm.length > 0 && next !== confirm && (
+              <p className="text-[11px] text-red-500 mt-1">Passwords don't match.</p>
+            )}
+          </div>
+          {error && <p className="text-xs text-red-500 dark:text-red-400" role="alert">{error}</p>}
+          {success && <p className="text-xs text-emerald-600 dark:text-emerald-400" role="status">Password changed successfully.</p>}
+          <button type="submit" disabled={mutation.isPending || !current || !next || !confirm || next !== confirm}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
+            {mutation.isPending ? 'Saving…' : 'Update password'}
+          </button>
+        </form>
+      </div>
+    </>
   );
 }
 
@@ -80,44 +117,35 @@ const THEMES: { value: ThemePreference; label: string; icon: string }[] = [
   { value: 'dark',   label: 'Dark',   icon: '🌙' },
 ];
 
+const THRESHOLDS = [50, 60, 70, 75, 80, 90, 95];
+
 function PreferencesSection() {
-  const { theme, currency, setTheme, setCurrency, formatMoney } = useSettings();
+  const { theme, currency, setTheme, setCurrency, formatMoney, budgetAlertThreshold, setBudgetAlertThreshold } = useSettings();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLUListElement>(null);
   const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
 
-  // Recalculate position whenever it opens or on scroll/resize
   useEffect(() => {
     if (!currencyOpen || !triggerRef.current) return;
-    const update = () => {
-      setDropdownRect(triggerRef.current!.getBoundingClientRect());
-    };
+    const update = () => setDropdownRect(triggerRef.current!.getBoundingClientRect());
     update();
     window.addEventListener('scroll', update, true);
     window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
+    return () => { window.removeEventListener('scroll', update, true); window.removeEventListener('resize', update); };
   }, [currencyOpen]);
 
-  // Close on outside click — ref-based, no stopPropagation
   useEffect(() => {
     if (!currencyOpen) return;
     function handleClick(e: MouseEvent) {
       const target = e.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
-      ) return;
+      if (triggerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
       setCurrencyOpen(false);
     }
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
   }, [currencyOpen]);
 
-  // Close on Escape
   useEffect(() => {
     if (!currencyOpen) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCurrencyOpen(false); };
@@ -128,140 +156,105 @@ function PreferencesSection() {
   const selectedCurrency = CURRENCIES.find((c) => c.value === currency);
 
   return (
-    <div className={`${glass} p-5 space-y-5`}>
-      <h2 className={sectionTitle}>Preferences</h2>
-
-      {/* Theme */}
-      <div>
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Theme</p>
-        <div className="flex gap-2 flex-wrap">
-          {THEMES.map((t) => (
-            <button key={t.value} type="button" onClick={() => setTheme(t.value)}
-              className={[
-                'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-150 focus:outline-none',
-                theme === t.value
-                  ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/20'
-                  : 'border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
-              ].join(' ')}
-              aria-pressed={theme === t.value}>
-              <span aria-hidden="true">{t.icon}</span>
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Currency */}
-      <div>
-        <label htmlFor="currency-trigger" className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">
-          Currency
-        </label>
-        <div className="max-w-xs">
-          <button
-            id="currency-trigger"
-            ref={triggerRef}
-            type="button"
-            onClick={() => setCurrencyOpen((o) => !o)}
-            aria-haspopup="listbox"
-            aria-expanded={currencyOpen}
-            className="w-full flex items-center justify-between rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
-          >
-            <span>{selectedCurrency?.label}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-400 transition-transform shrink-0 ${currencyOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Portaled dropdown — escapes stacking context of backdrop-blur cards */}
-        {currencyOpen && dropdownRect && createPortal(
-          <ul
-            ref={dropdownRef}
-            role="listbox"
-            aria-label="Currency"
-            style={{
-              position: 'fixed',
-              top: dropdownRect.bottom + 4,
-              left: dropdownRect.left,
-              width: dropdownRect.width,
-              zIndex: 9999,
-            }}
-            className="rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1a1a2e] shadow-xl overflow-hidden py-1"
-          >
-            {CURRENCIES.map((c) => (
-              <li
-                key={c.value}
-                role="option"
-                aria-selected={currency === c.value}
-                onClick={() => { setCurrency(c.value); setCurrencyOpen(false); }}
-                className={`px-3 py-2.5 text-sm cursor-pointer select-none transition-colors ${
-                  currency === c.value
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
-                }`}
-              >
-                {c.label}
-              </li>
+    <>
+      <hr className={divider} />
+      <div className="space-y-5">
+        {/* Theme */}
+        <div>
+          <h2 className={sectionTitle}>Preferences</h2>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Theme</p>
+          <div className="flex gap-2 flex-wrap">
+            {THEMES.map((t) => (
+              <button key={t.value} type="button" onClick={() => setTheme(t.value)}
+                className={[
+                  'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-150 focus:outline-none',
+                  theme === t.value
+                    ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/20'
+                    : 'border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
+                ].join(' ')}
+                aria-pressed={theme === t.value}>
+                <span aria-hidden="true">{t.icon}</span>{t.label}
+              </button>
             ))}
-          </ul>,
-          document.body
-        )}
+          </div>
+        </div>
 
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
-          Preview: {formatMoney(125000)} · {formatMoney(9999)}
-        </p>
+        {/* Currency */}
+        <div>
+          <label htmlFor="currency-trigger" className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 block">Currency</label>
+          <div className="max-w-xs">
+            <button id="currency-trigger" ref={triggerRef} type="button"
+              onClick={() => setCurrencyOpen((o) => !o)}
+              aria-haspopup="listbox" aria-expanded={currencyOpen}
+              className="w-full flex items-center justify-between rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors">
+              <span>{selectedCurrency?.label}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-400 transition-transform shrink-0 ${currencyOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          {currencyOpen && dropdownRect && createPortal(
+            <ul ref={dropdownRef} role="listbox" aria-label="Currency"
+              style={{ position: 'fixed', top: dropdownRect.bottom + 4, left: dropdownRect.left, width: dropdownRect.width, zIndex: 9999 }}
+              className="rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1a1a2e] shadow-xl overflow-hidden py-1">
+              {CURRENCIES.map((c) => (
+                <li key={c.value} role="option" aria-selected={currency === c.value}
+                  onClick={() => { setCurrency(c.value); setCurrencyOpen(false); }}
+                  className={`px-3 py-2.5 text-sm cursor-pointer select-none transition-colors ${currency === c.value ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}>
+                  {c.label}
+                </li>
+              ))}
+            </ul>,
+            document.body
+          )}
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+            Preview: {formatMoney(125000)} · {formatMoney(9999)}
+          </p>
+        </div>
+
+        {/* Budget alert threshold */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Budget alert threshold</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Warn when spending reaches this % of a budget limit.</p>
+          <div className="flex flex-wrap gap-2">
+            {THRESHOLDS.map((t) => (
+              <button key={t} type="button" onClick={() => setBudgetAlertThreshold(t)}
+                className={[
+                  'rounded-xl border px-3 py-1.5 text-sm font-medium transition-all duration-150 focus:outline-none',
+                  budgetAlertThreshold === t
+                    ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/20'
+                    : 'border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
+                ].join(' ')}
+                aria-pressed={budgetAlertThreshold === t}>
+                {t}%
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
-// ─── Budget alerts ────────────────────────────────────────────────────────────
-
-const THRESHOLDS = [50, 60, 70, 75, 80, 90, 95];
-
-function BudgetAlertsSection() {
-  const { budgetAlertThreshold, setBudgetAlertThreshold } = useSettings();
-
-  return (
-    <div className={`${glass} p-5`}>
-      <h2 className={sectionTitle}>Budget Alerts</h2>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-        Show a warning when spending reaches this percentage of a budget limit.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {THRESHOLDS.map((t) => (
-          <button key={t} type="button" onClick={() => setBudgetAlertThreshold(t)}
-            className={[
-              'rounded-xl border px-3 py-1.5 text-sm font-medium transition-all duration-150 focus:outline-none',
-              budgetAlertThreshold === t
-                ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/20'
-                : 'border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
-            ].join(' ')}
-            aria-pressed={budgetAlertThreshold === t}>
-            {t}%
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ─── Data export ──────────────────────────────────────────────────────────────
 
 function DataSection() {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [range, setRange] = useState<'year' | 'all'>('year');
 
   async function handleExport() {
     setExportLoading(true); setExportError('');
     try {
       const now = new Date();
-      const from = `${now.getFullYear() - 1}-01-01`;
       const to = now.toISOString().slice(0, 10);
+      const from = range === 'all' ? '2000-01-01' : `${now.getFullYear() - 1}-01-01`;
       const res = await reportsApi.exportCSV({ from, to });
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'ledgr-export.csv'; a.click();
+      a.href = url;
+      a.download = `ledgr-export-${range === 'all' ? 'all-time' : now.getFullYear()}.csv`;
+      a.click();
       URL.revokeObjectURL(url);
     } catch {
       setExportError('Export failed. Please try again.');
@@ -271,23 +264,38 @@ function DataSection() {
   }
 
   return (
-    <div className={`${glass} p-5`}>
-      <h2 className={sectionTitle}>Data</h2>
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Export all data</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Downloads all your expenses as a CSV file.</p>
-          <button type="button" onClick={handleExport} disabled={exportLoading}
-            className="flex items-center gap-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-50 transition-colors focus:outline-none">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-            {exportLoading ? 'Exporting…' : 'Export CSV'}
-          </button>
-          {exportError && <p className="text-xs text-red-500 mt-1">{exportError}</p>}
+    <>
+      <hr className={divider} />
+      <div>
+        <h2 className={sectionTitle}>Data Export</h2>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">Download your expenses as a CSV file.</p>
+
+        {/* Range toggle */}
+        <div className="flex gap-2 mb-3">
+          {(['year', 'all'] as const).map((r) => (
+            <button key={r} type="button" onClick={() => setRange(r)}
+              className={[
+                'rounded-xl border px-3 py-1.5 text-sm font-medium transition-all duration-150 focus:outline-none',
+                range === r
+                  ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/20'
+                  : 'border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
+              ].join(' ')}
+              aria-pressed={range === r}>
+              {r === 'year' ? 'This year' : 'All time'}
+            </button>
+          ))}
         </div>
+
+        <button type="button" onClick={handleExport} disabled={exportLoading}
+          className="flex items-center gap-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-50 transition-colors focus:outline-none">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+          {exportLoading ? 'Exporting…' : 'Export CSV'}
+        </button>
+        {exportError && <p className="text-xs text-red-500 mt-1.5" role="alert">{exportError}</p>}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -314,7 +322,6 @@ function DangerZoneSection() {
   return (
     <div className="rounded-2xl border border-red-200/60 dark:border-red-500/20 bg-red-50/40 dark:bg-red-900/10 p-5">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-red-500 dark:text-red-400 mb-4">Danger Zone</h2>
-
       {!showConfirm ? (
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
@@ -327,13 +334,11 @@ function DangerZoneSection() {
         </div>
       ) : (
         <div className="space-y-3 max-w-sm">
-          <p className="text-sm font-medium text-red-600 dark:text-red-400">
-            Enter your password to confirm deletion.
-          </p>
+          <p className="text-sm font-medium text-red-600 dark:text-red-400">Enter your password to confirm deletion.</p>
           <input type="password" placeholder="Your password" value={password}
             onChange={(e) => { setPassword(e.target.value); setError(''); }}
             className={inputCls} autoFocus />
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
           <div className="flex gap-2">
             <button type="button" onClick={() => { setShowConfirm(false); setPassword(''); setError(''); }}
               className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors focus:outline-none">
@@ -362,27 +367,27 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5 max-w-2xl">
-      {/* Account info */}
+      {/* Single card containing account info + password + preferences + data */}
       <div className={`${glass} p-5`}>
-        <h2 className={sectionTitle}>Account</h2>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white select-none">
-            {email[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{email}</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Signed in</p>
+        {/* Account info */}
+        <div>
+          <h2 className={sectionTitle}>Account</h2>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white select-none shrink-0">
+              {email[0]?.toUpperCase() ?? '?'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{email}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Personal account · v{__APP_VERSION__}</p>
+            </div>
           </div>
         </div>
-        <div className="mt-4 pt-4 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
-          <span className="text-xs text-gray-400 dark:text-gray-500">Version</span>
-          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">v{__APP_VERSION__}</span>
-        </div>
+
+        <ChangePasswordSection />
+        <PreferencesSection />
+        <DataSection />
       </div>
-      <ChangePasswordSection />
-      <PreferencesSection />
-      <BudgetAlertsSection />
-      <DataSection />
+
       <DangerZoneSection />
     </div>
   );

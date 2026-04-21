@@ -183,57 +183,74 @@ export async function processDueRecurringIncome(userId?: string): Promise<number
 
   const params = userId ? [today, userId] : [today];
 
-  const { rows: dueRows } = await pool.query(
-    `SELECT * FROM recurring_income ${whereClause}`,
-    params,
-  );
-
-  if (dueRows.length === 0) return 0;
-
+  const client = await pool.connect();
   let created = 0;
 
-  for (const row of dueRows as Record<string, unknown>[]) {
-    const rec = rowToRecurringIncome(row);
+  try {
+    await client.query('BEGIN');
 
-    // Skip if past end_date
-    if (rec.endDate && rec.nextDueDate > rec.endDate) continue;
-
-    const dueDate = new Date(rec.nextDueDate);
-    const year = dueDate.getFullYear();
-    const month = dueDate.getMonth() + 1;
-
-    // Avoid duplicate: check if an income entry from this recurring template already exists
-    // for this exact due date period
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM income
-       WHERE user_id = $1 AND recurring_id = $2 AND year = $3 AND month = $4`,
-      [rec.userId, rec.id, year, month],
+    // FOR UPDATE SKIP LOCKED: if two process() calls run concurrently, the second
+    // skips rows already locked by the first — prevents duplicate income entries.
+    const { rows: dueRows } = await client.query(
+      `SELECT * FROM recurring_income ${whereClause} FOR UPDATE SKIP LOCKED`,
+      params,
     );
 
-    if (existing.length === 0) {
-      await pool.query(
-        `INSERT INTO income (user_id, amount, currency, year, month, label, recurring_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [rec.userId, rec.amount, rec.currency, year, month, rec.label, rec.id],
-      );
-      created++;
+    if (dueRows.length === 0) {
+      await client.query('COMMIT');
+      return 0;
     }
 
-    // Advance next_due_date
-    const nextDue = computeNextDueDate(
-      rec.frequency,
-      dueDate,
-      rec.dayOfWeek,
-      rec.dayOfMonth,
-      rec.monthOfYear,
-    );
+    for (const row of dueRows as Record<string, unknown>[]) {
+      const rec = rowToRecurringIncome(row);
 
-    await pool.query(
-      `UPDATE recurring_income
-       SET next_due_date = $1, last_run_at = NOW(), updated_at = NOW()
-       WHERE id = $2`,
-      [nextDue.toISOString().slice(0, 10), rec.id],
-    );
+      // Skip if past end_date
+      if (rec.endDate && rec.nextDueDate > rec.endDate) continue;
+
+      const dueDate = new Date(rec.nextDueDate);
+      const year = dueDate.getFullYear();
+      const month = dueDate.getMonth() + 1;
+
+      // Avoid duplicate: check if an income entry from this recurring template already exists
+      // for this exact due date period
+      const { rows: existing } = await client.query(
+        `SELECT id FROM income
+         WHERE user_id = $1 AND recurring_id = $2 AND year = $3 AND month = $4`,
+        [rec.userId, rec.id, year, month],
+      );
+
+      if (existing.length === 0) {
+        await client.query(
+          `INSERT INTO income (user_id, amount, currency, year, month, label, recurring_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [rec.userId, rec.amount, rec.currency, year, month, rec.label, rec.id],
+        );
+        created++;
+      }
+
+      // Advance next_due_date
+      const nextDue = computeNextDueDate(
+        rec.frequency,
+        dueDate,
+        rec.dayOfWeek,
+        rec.dayOfMonth,
+        rec.monthOfYear,
+      );
+
+      await client.query(
+        `UPDATE recurring_income
+         SET next_due_date = $1, last_run_at = NOW(), updated_at = NOW()
+         WHERE id = $2`,
+        [nextDue.toISOString().slice(0, 10), rec.id],
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 
   return created;

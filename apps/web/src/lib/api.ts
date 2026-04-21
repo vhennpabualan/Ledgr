@@ -111,7 +111,7 @@ export const authApi = {
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
 export const expensesApi = {
-  create: (data: CreateExpenseDTO) =>
+  create: (data: CreateExpenseDTO & { walletId?: string }) =>
     api.post<Expense>('/expenses', data),
 
   list: (filters?: Partial<ExpenseFilters>) =>
@@ -178,6 +178,9 @@ export const budgetsApi = {
 
   delete: (id: string) =>
     api.delete(`/budgets/${id}`),
+
+  copy: (fromYear: number, fromMonth: number, toYear: number, toMonth: number) =>
+    api.post<{ created: number; budgets: Budget[] }>('/budgets/copy', { fromYear, fromMonth, toYear, toMonth }),
 
   listPending: (budgetId: string) =>
     api.get<PendingSpend[]>(`/budgets/${budgetId}/pending`),

@@ -79,7 +79,8 @@ expenseRouter.post(
 // POST /expenses — create a new expense
 expenseRouter.post('/', async (req: Request, res: Response) => {
   const body = CreateExpenseSchema.parse(req.body);
-  const expense = await createExpense(req.userId!, body);
+  const walletId = typeof req.body.walletId === 'string' ? req.body.walletId : undefined;
+  const expense = await createExpense(req.userId!, body, undefined, walletId);
   res.status(201).json(expense);
 });
 

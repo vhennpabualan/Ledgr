@@ -122,6 +122,107 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
   );
 }
 
+// ─── Mobile expense row ───────────────────────────────────────────────────────
+// Tap = edit, hold the ⋯ button to reveal delete. No overlapping absolute elements.
+
+function MobileExpenseRow({
+  expense,
+  category,
+  isExiting,
+  onEdit,
+  onDelete,
+}: {
+  expense: Expense;
+  category: Category | undefined;
+  isExiting: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { formatMoney } = useSettings();
+  const [showDelete, setShowDelete] = useState(false);
+
+  return (
+    <li className={`border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 ${isExiting ? 'item-exit' : 'item-enter'}`}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Icon */}
+        <button
+          type="button"
+          onClick={onEdit}
+          className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl"
+          aria-label={`Edit ${expense.description ?? category?.name ?? 'expense'}`}
+          tabIndex={-1}
+        >
+          {expense.description && getDomainFromLabel(expense.description)
+            ? <BrandLogo label={expense.description} size={40} />
+            : <span
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-white/90 border border-black/[0.07] dark:border-white/[0.10] shadow-sm shadow-black/[0.04] text-lg"
+                aria-hidden="true"
+              >
+                {category?.icon ?? '💸'}
+              </span>
+          }
+        </button>
+
+        {/* Content — tappable to edit */}
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-lg"
+          aria-label={`Edit ${expense.description ?? category?.name ?? 'expense'}`}
+        >
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
+              {expense.description ?? category?.name ?? '—'}
+            </p>
+            {expense.recurringId && <RecurringIcon />}
+            {expense.receiptUrl && <ReceiptIcon />}
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+            {category?.name ?? ''}
+          </p>
+        </button>
+
+        {/* Right side: amount + action */}
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          <span className="text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">
+            {formatMoney(expense.amount)}
+          </span>
+
+          {showDelete ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => { setShowDelete(false); onDelete(); }}
+                className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors focus:outline-none"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                className="rounded-lg px-2 py-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 border border-black/10 dark:border-white/10 hover:bg-black/[0.04] transition-colors focus:outline-none"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowDelete(true)}
+              className="rounded-lg p-1 text-gray-300 dark:text-gray-600 hover:text-red-400 hover:bg-red-50/80 dark:hover:bg-red-900/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+              aria-label={`Delete ${expense.description ?? category?.name ?? 'expense'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ExpensesPage() {
@@ -342,50 +443,23 @@ export default function ExpensesPage() {
               </tfoot>
             </table>
 
-            {/* Mobile list */}
-            <ul className="md:hidden divide-y divide-black/[0.05] dark:divide-white/[0.05]">
+            {/* Mobile list — date-grouped sections, individual rows */}
+            <ul className="md:hidden">
               {groups.map(({ label, items }) => (
                 <React.Fragment key={label}>
-                  <li className="px-4 pt-3 pb-1 bg-black/[0.01] dark:bg-white/[0.01]" aria-hidden="true">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
+                  {/* Date section header */}
+                  <li className="sticky top-0 z-10 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] backdrop-blur-sm border-b border-black/[0.05] dark:border-white/[0.05]">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
                   </li>
                   {items.map((expense) => (
-                    <li key={expense.id} className={`relative ${exitingIds.has(expense.id) ? 'item-exit' : 'item-enter'}`}>
-                      <div role="button" tabIndex={0} onClick={() => openEdit(expense)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] active:bg-black/[0.04] dark:active:bg-white/[0.04] transition-colors cursor-pointer"
-                        aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}>
-                        {expense.description && getDomainFromLabel(expense.description)
-                          ? <BrandLogo label={expense.description} size={36} className="shrink-0" />
-                          : <span
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white/90 border border-black/[0.07] dark:border-white/[0.10] shadow-sm shadow-black/[0.04] text-lg"
-                              aria-hidden="true"
-                            >
-                              {categoryMap.get(expense.categoryId)?.icon ?? '💸'}
-                            </span>
-                        }
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
-                              {expense.description ?? categoryMap.get(expense.categoryId)?.name ?? '—'}
-                            </p>
-                            {expense.recurringId && <RecurringIcon />}
-                            {expense.receiptUrl && <ReceiptIcon />}
-                          </div>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                            {categoryMap.get(expense.categoryId) && <span>{categoryMap.get(expense.categoryId)!.name}</span>}
-                          </p>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tabular-nums pr-10">{formatMoney(expense.amount)}</span>
-                      </div>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); deleteExpense(expense.id); }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-gray-300 dark:text-gray-600 active:text-red-500 active:bg-red-50/80 dark:active:bg-red-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                        aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    </li>
+                    <MobileExpenseRow
+                      key={expense.id}
+                      expense={expense}
+                      category={categoryMap.get(expense.categoryId)}
+                      isExiting={exitingIds.has(expense.id)}
+                      onEdit={() => openEdit(expense)}
+                      onDelete={() => deleteExpense(expense.id)}
+                    />
                   ))}
                 </React.Fragment>
               ))}

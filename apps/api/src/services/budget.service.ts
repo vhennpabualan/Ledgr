@@ -164,3 +164,61 @@ export async function listBudgets(
 
   return rows.map((r) => rowToBudget(r as Record<string, unknown>));
 }
+
+/**
+ * copyBudgets — copies all budgets from (fromYear, fromMonth) into (toYear, toMonth).
+ * Skips any category that already has a budget in the target period (no overwrite).
+ * Returns the list of newly created budgets.
+ */
+export async function copyBudgets(
+  userId: string,
+  fromYear: number,
+  fromMonth: number,
+  toYear: number,
+  toMonth: number,
+): Promise<Budget[]> {
+  const { rows: source } = await pool.query(
+    `SELECT * FROM budgets WHERE user_id = $1 AND year = $2 AND month = $3`,
+    [userId, fromYear, fromMonth],
+  );
+
+  if (source.length === 0) return [];
+
+  const client = await pool.connect();
+  const created: Budget[] = [];
+
+  try {
+    await client.query('BEGIN');
+
+    for (const row of source as Record<string, unknown>[]) {
+      // Skip if already exists in target period
+      const { rows: existing } = await client.query(
+        `SELECT id FROM budgets WHERE user_id = $1 AND category_id = $2 AND year = $3 AND month = $4`,
+        [userId, row.category_id, toYear, toMonth],
+      );
+      if (existing.length > 0) continue;
+
+      const { rows: inserted } = await client.query(
+        `INSERT INTO budgets (user_id, category_id, limit_amount, currency, year, month, rollover)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [userId, row.category_id, row.limit_amount, row.currency, toYear, toMonth, row.rollover],
+      );
+
+      const budget = rowToBudget(inserted[0] as Record<string, unknown>);
+      await appendLedgerEntry(client, 'budget', budget.id, 'create', userId, {
+        ...budget,
+        copiedFrom: { year: fromYear, month: fromMonth },
+      });
+      created.push(budget);
+    }
+
+    await client.query('COMMIT');
+    return created;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}

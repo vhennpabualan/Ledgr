@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { expensesApi, categoriesApi, walletsApi } from '../lib/api';
 import type { Expense, Category, CreateExpenseDTO, Wallet } from '@ledgr/types';
 import DatePicker, { todayISO } from './DatePicker';
+import { BrandLogo } from './BrandLogo';
 
 interface ExpenseFormProps {
   expense?: Expense; // if provided, form is in edit mode
@@ -51,6 +52,7 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
   const [errors, setErrors] = useState<FormErrors>({});
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [receiptDeleted, setReceiptDeleted] = useState(false);
   const [deletingReceipt, setDeletingReceipt] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -338,27 +340,107 @@ export default function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFor
       {/* Wallet deduction — only on create, only if wallets exist */}
       {!isEdit && wallets.length > 0 && (
         <div>
-          <label htmlFor="ef-wallet" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-            Deduct from account <span className="font-normal text-gray-400 dark:text-gray-500">(optional)</span>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            Pay from account
           </label>
-          <select
-            id="ef-wallet"
-            value={form.walletId}
-            onChange={(e) => setForm((prev) => ({ ...prev, walletId: e.target.value }))}
-            className={inputClass()}
-          >
-            <option value="">— None —</option>
-            {wallets.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} ({w.currency} {(w.balance / 100).toLocaleString()})
-              </option>
-            ))}
-          </select>
-          {form.walletId && (
-            <p className="mt-1 text-xs text-indigo-500 dark:text-indigo-400">
-              Balance will be reduced by {form.amount ? `${form.currency} ${parseFloat(form.amount || '0').toLocaleString()}` : 'the entered amount'} on save.
-            </p>
-          )}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setWalletOpen((o) => !o)}
+              aria-haspopup="listbox"
+              aria-expanded={walletOpen}
+              className={`w-full flex items-center justify-between rounded-xl border px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-colors border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.06] text-gray-800 dark:text-gray-100`}
+            >
+              <span className="flex items-center gap-2 truncate">
+                {form.walletId ? (
+                  <>
+                    <BrandLogo label={wallets.find(w => w.id === form.walletId)?.name ?? ''} size={20} />
+                    <span>{wallets.find(w => w.id === form.walletId)?.name}</span>
+                    <span className="text-gray-400 dark:text-gray-500 text-xs tabular-nums">
+                      {wallets.find(w => w.id === form.walletId)?.currency}{' '}
+                      {((wallets.find(w => w.id === form.walletId)?.balance ?? 0) / 100).toLocaleString()}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-gray-500 dark:text-gray-400">Salary / Bank balance</span>
+                )}
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-400 transition-transform shrink-0 ml-2 ${walletOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            {walletOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setWalletOpen(false)} aria-hidden="true" />
+                <ul role="listbox" aria-label="Pay from account" className="absolute z-20 mt-1 w-full rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1a1a2e] shadow-lg overflow-hidden py-1">
+                  {/* Salary option */}
+                  <li
+                    role="option"
+                    aria-selected={form.walletId === ''}
+                    onClick={() => { setForm(p => ({ ...p, walletId: '' })); setWalletOpen(false); }}
+                    className={`flex items-center gap-3 px-3 py-2.5 text-sm cursor-pointer select-none transition-colors ${
+                      form.walletId === ''
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-base" aria-hidden="true">🏦</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">Salary / Bank balance</p>
+                      <p className={`text-xs truncate ${form.walletId === '' ? 'text-indigo-200' : 'text-gray-400 dark:text-gray-500'}`}>Deducts from your income balance</p>
+                    </div>
+                    {form.walletId === '' && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </li>
+
+                  {/* Divider */}
+                  <li role="separator" className="my-1 h-px bg-black/[0.06] dark:bg-white/[0.06]" />
+
+                  {/* Wallet options */}
+                  {wallets.map((w) => {
+                    const selected = form.walletId === w.id;
+                    const isNeg = w.balance < 0;
+                    return (
+                      <li
+                        key={w.id}
+                        role="option"
+                        aria-selected={selected}
+                        onClick={() => { setForm(p => ({ ...p, walletId: w.id })); setWalletOpen(false); }}
+                        className={`flex items-center gap-3 px-3 py-2.5 text-sm cursor-pointer select-none transition-colors ${
+                          selected
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-700 dark:text-gray-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <BrandLogo label={w.name} size={28} className="shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{w.name}</p>
+                          <p className={`text-xs tabular-nums ${selected ? 'text-indigo-200' : isNeg ? 'text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                            {isNeg ? '−' : ''}{w.currency} {(Math.abs(w.balance) / 100).toLocaleString()}
+                          </p>
+                        </div>
+                        {selected && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            {form.walletId
+              ? 'Deducted from wallet only — will not affect your salary balance.'
+              : 'Will deduct from your salary / bank balance.'}
+          </p>
         </div>
       )}
 

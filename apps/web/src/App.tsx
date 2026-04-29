@@ -19,6 +19,7 @@ const SettingsPage   = lazy(() => import('./pages/SettingsPage'));
 const RecurringPage       = lazy(() => import('./pages/RecurringPage'));
 const RecurringIncomePage = lazy(() => import('./pages/RecurringIncomePage'));
 const WalletsPage         = lazy(() => import('./pages/WalletsPage'));
+const ExpenseDetailPage   = lazy(() => import('./pages/ExpenseDetailPage'));
 
 // Minimal page skeleton shown during lazy-load
 function PageSkeleton() {
@@ -62,6 +63,7 @@ export default function App() {
                 <Route element={<AppLayout />}>
                   <Route path="/" element={<Suspense fallback={<PageSkeleton />}><DashboardPage /></Suspense>} />
                   <Route path="/expenses" element={<Suspense fallback={<PageSkeleton />}><ExpensesPage /></Suspense>} />
+                  <Route path="/expenses/:id" element={<Suspense fallback={<PageSkeleton />}><ExpenseDetailPage /></Suspense>} />
                   <Route path="/budgets" element={<Suspense fallback={<PageSkeleton />}><BudgetsPage /></Suspense>} />
                   <Route path="/reports" element={<Suspense fallback={<PageSkeleton />}><ReportsPage /></Suspense>} />
                   <Route path="/categories" element={<Suspense fallback={<PageSkeleton />}><CategoriesPage /></Suspense>} />

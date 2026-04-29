@@ -117,6 +117,7 @@ function UserMenu({ onLogout }: { onLogout: () => void }) {
 
 function usePageTitle() {
   const { pathname } = useLocation();
+  if (pathname.startsWith('/expenses/')) return 'Expense';
   const map: Record<string, string> = {
     '/': 'Dashboard', '/expenses': 'Expenses', '/budgets': 'Budgets',
     '/recurring': 'Recurring', '/recurring-income': 'Recurring Income',

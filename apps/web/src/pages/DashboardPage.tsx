@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportsApi, expensesApi, budgetsApi, incomeApi, categoriesApi, walletsApi, recurringIncomeApi } from '../lib/api';
-import type { ReportSummary, TrendPoint, Expense, BalanceSummary, Category, Budget, Wallet } from '@ledgr/types';
+import type { ReportSummary, TrendPoint, Expense, BalanceSummary, Category, Budget, Wallet, Income } from '@ledgr/types';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '../contexts/SettingsContext';
-import { IncomeModal, BalanceCard, ForecastCard, DashboardBudgetRow } from '../components/dashboard';
+import { BalanceCard, ForecastCard, DashboardBudgetRow } from '../components/dashboard';
 import { BrandLogo, getDomainFromLabel } from '../components/BrandLogo';
-import BottomSheet from '../components/BottomSheet';
-import ExpenseForm from '../components/ExpenseForm';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,35 +53,81 @@ function SectionHeader({ title, linkTo, linkLabel }: { title: string; linkTo: st
 
 // ─── Recent expense row ───────────────────────────────────────────────────────
 
-function RecentRow({ expense, categoryMap, onTap }: {
-  expense: Expense;
+// ─── Unified transaction row ──────────────────────────────────────────────────
+
+type Transaction =
+  | { kind: 'expense'; data: Expense; sortKey: string }
+  | { kind: 'income';  data: Income;  sortKey: string };
+
+function TransactionRow({ tx, categoryMap, walletMap, onExpenseTap }: {
+  tx: Transaction;
   categoryMap: Map<string, Category>;
-  onTap: (e: Expense) => void;
+  walletMap: Map<string, Wallet>;
+  onExpenseTap: (e: Expense) => void;
 }) {
   const { formatMoney } = useSettings();
-  const category = categoryMap.get(expense.categoryId);
-  const date = new Date(expense.date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+
+  if (tx.kind === 'income') {
+    const inc = tx.data;
+    const date = new Date(inc.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+    return (
+      <div className="w-full flex items-center gap-3 py-2.5 border-b border-black/[0.05] dark:border-white/[0.05] last:border-0">
+        <BrandLogo label={inc.label} size={36} className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-gray-700 dark:text-gray-200">{inc.label}</p>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-500">
+              {inc.recurringId ? '🔁 Recurring income' : '💰 Income'}
+            </span>
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            +{formatMoney(inc.amount)}
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{date}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const exp = tx.data;
+  const category = categoryMap.get(exp.categoryId);
+  const walletName = exp.walletId ? (walletMap.get(exp.walletId)?.name ?? null) : null;
+  const date = new Date(exp.date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 
   return (
     <button
       type="button"
-      onClick={() => onTap(expense)}
+      onClick={() => onExpenseTap(exp)}
       className="w-full flex items-center gap-3 py-2.5 border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 text-left active:bg-black/[0.03] dark:active:bg-white/[0.03] rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
     >
-      {expense.description && getDomainFromLabel(expense.description)
-        ? <BrandLogo label={expense.description} size={36} className="shrink-0" />
+      {exp.description && getDomainFromLabel(exp.description)
+        ? <BrandLogo label={exp.description} size={36} className="shrink-0" />
         : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white/90 border border-black/[0.07] dark:border-white/[0.10] shadow-sm text-base" aria-hidden="true">
             {category?.icon ?? '💸'}
           </span>
       }
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-gray-700 dark:text-gray-200">
-          {expense.description ?? category?.name ?? 'No description'}
+          {exp.description ?? category?.name ?? 'No description'}
         </p>
-        <p className="text-xs text-gray-400 dark:text-gray-500">{category?.name ?? date}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {category?.name && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{category.name}</p>}
+          {category?.name && <span className="text-gray-300 dark:text-gray-600 text-xs" aria-hidden="true">·</span>}
+          {walletName
+            ? <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-indigo-500 dark:text-indigo-400">
+                <BrandLogo label={walletName} size={10} />
+                from {walletName}
+              </span>
+            : <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">from 🏦 Salary</span>
+          }
+        </div>
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 tabular-nums">{formatMoney(expense.amount)}</p>
+        <p className="text-sm font-semibold text-red-500 dark:text-red-400 tabular-nums">
+          −{formatMoney(exp.amount)}
+        </p>
         <p className="text-xs text-gray-400 dark:text-gray-500">{date}</p>
       </div>
     </button>
@@ -157,10 +201,9 @@ function SpendChart({ data, isDark, formatMoney }: { data: TrendPoint[]; isDark:
 export default function DashboardPage() {
   const { year, month } = currentYearMonth();
   const { formatMoney } = useSettings();
+  const navigate = useNavigate();
   const from = firstOfMonth();
   const to = new Date().toISOString().slice(0, 10);
-  const [showIncomeModal, setShowIncomeModal] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showAllBudgets, setShowAllBudgets] = useState(false);
   const queryClient = useQueryClient();
 
@@ -197,7 +240,11 @@ export default function DashboardPage() {
   });
   const recent = useQuery({
     queryKey: ['dashboard-recent'],
-    queryFn: () => expensesApi.list({ page: 1, pageSize: 5 }).then((r) => r.data),
+    queryFn: () => expensesApi.list({ page: 1, pageSize: 8 }).then((r) => r.data),
+  });
+  const recentIncome = useQuery<Income[]>({
+    queryKey: ['income-entries', year, month],
+    queryFn: () => incomeApi.listEntries(year, month).then((r) => r.data),
   });
   const budgets = useQuery<Budget[]>({
     queryKey: ['dashboard-budgets', year, month],
@@ -217,6 +264,23 @@ export default function DashboardPage() {
   });
 
   const categoryMap = new Map((categories.data ?? []).map((c) => [c.id, c]));
+  const walletMap = new Map((wallets.data ?? []).map((w) => [w.id, w]));
+
+  // Merge expenses + income into a unified sorted transaction feed (newest first, max 8)
+  const transactions: Transaction[] = [
+    ...(recent.data?.data ?? []).map((e): Transaction => ({
+      kind: 'expense',
+      data: e,
+      sortKey: `${e.date}T${e.createdAt.slice(11)}`, // date + time for stable sort
+    })),
+    ...(recentIncome.data ?? []).map((i): Transaction => ({
+      kind: 'income',
+      data: i,
+      sortKey: i.createdAt,
+    })),
+  ]
+    .sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+    .slice(0, 8);
   const BUDGET_PREVIEW = 4;
   const visibleBudgets = showAllBudgets
     ? (budgets.data ?? [])
@@ -225,21 +289,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      {showIncomeModal && (
-        <IncomeModal year={year} month={month} onClose={() => setShowIncomeModal(false)} />
-      )}
-      <BottomSheet open={!!editingExpense} onClose={() => setEditingExpense(null)} title="Edit expense">
-        {editingExpense && (
-          <ExpenseForm expense={editingExpense} onSuccess={() => setEditingExpense(null)} onCancel={() => setEditingExpense(null)} />
-        )}
-      </BottomSheet>
-
       {/* ── Balance card (hero) ── */}
       {balance.isLoading
         ? <Skeleton className="h-52" />
         : balance.isError
         ? <p className="text-sm text-red-500">Failed to load balance.</p>
-        : <BalanceCard balance={balance.data!} onEdit={() => setShowIncomeModal(true)} />
+        : <BalanceCard balance={balance.data!} wallets={wallets.data ?? []} year={year} month={month} />
       }
 
       {/* ── Spending overview: chart + top stat inline ── */}
@@ -315,21 +370,27 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Recent expenses ── */}
+      {/* ── Recent transactions (expenses + income, unified) ── */}
       <div className={`${glass} p-4`}>
-        <SectionHeader title="Recent expenses" linkTo="/expenses" linkLabel="View all" />
-        {recent.isLoading
+        <SectionHeader title="Recent transactions" linkTo="/expenses" linkLabel="View all" />
+        {(recent.isLoading || recentIncome.isLoading)
           ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
-          : recent.isError
+          : (recent.isError || recentIncome.isError)
           ? <p className="text-sm text-red-500 dark:text-red-400">Failed to load.</p>
-          : recent.data!.data.length === 0
+          : transactions.length === 0
           ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-gray-400 dark:text-gray-500">No expenses yet this month.</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">No transactions yet this month.</p>
             </div>
           )
-          : recent.data!.data.map((e) => (
-              <RecentRow key={e.id} expense={e} categoryMap={categoryMap} onTap={setEditingExpense} />
+          : transactions.map((tx) => (
+              <TransactionRow
+                key={tx.kind === 'expense' ? `e-${tx.data.id}` : `i-${tx.data.id}`}
+                tx={tx}
+                categoryMap={categoryMap}
+                walletMap={walletMap}
+                onExpenseTap={(exp) => navigate(`/expenses/${exp.id}`)}
+              />
             ))
         }
       </div>

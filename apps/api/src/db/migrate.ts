@@ -22,6 +22,7 @@ const MIGRATIONS = [
   '009_wallets.sql',
   '010_recurring_income.sql',
   '011_income_biweekly_fix.sql',
+  '012_expense_wallet_id.sql',
 ];
 
 async function migrate(): Promise<void> {

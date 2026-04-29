@@ -105,7 +105,8 @@ export async function getBalanceSummary(
      WHERE user_id = $1
        AND EXTRACT(YEAR FROM date) = $2
        AND EXTRACT(MONTH FROM date) = $3
-       AND deleted_at IS NULL`,
+       AND deleted_at IS NULL
+       AND wallet_id IS NULL`,
     [userId, year, month],
   );
 

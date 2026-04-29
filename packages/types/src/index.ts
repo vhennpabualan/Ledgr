@@ -28,6 +28,8 @@ export interface Expense {
   updatedAt: string;
   /** ID of recurring template that created this expense */
   recurringId?: string | null;
+  /** ID of wallet this expense was paid from (null = salary/bank balance) */
+  walletId?: string | null;
 }
 
 // ─── Category ────────────────────────────────────────────────────────────────

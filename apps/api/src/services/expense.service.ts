@@ -11,19 +11,17 @@ export function rowToExpense(row: Record<string, unknown>): Expense {
   return {
     id: row.id as string,
     userId: row.user_id as string,
-    // BIGINT comes back as string from pg driver — coerce to number (safe: max 99_999_999)
     amount: Number(row.amount),
     currency: row.currency as string,
-    // DATE columns come back as JS Date objects at local midnight — use local
-    // date parts to avoid UTC conversion shifting the day (e.g. UTC+8 → -1 day)
     date: row.date instanceof Date
       ? `${row.date.getFullYear()}-${String(row.date.getMonth() + 1).padStart(2, '0')}-${String(row.date.getDate()).padStart(2, '0')}`
       : (row.date as string),
     categoryId: row.category_id as string,
     description: row.description as string | null,
     receiptUrl: row.receipt_url as string | null,
-    splits: [], // always empty in v1
+    splits: [],
     recurringId: row.recurring_id as string | null,
+    walletId: (row.wallet_id as string | null) ?? null,
     deletedAt: row.deleted_at != null
       ? (row.deleted_at as Date).toISOString()
       : null,
@@ -89,8 +87,8 @@ export async function createExpense(
 
     const { rows } = await client.query(
       `INSERT INTO expenses
-         (user_id, amount, currency, date, category_id, description, receipt_url, recurring_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (user_id, amount, currency, date, category_id, description, receipt_url, recurring_id, wallet_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         userId,
@@ -101,6 +99,7 @@ export async function createExpense(
         description ?? null,
         receiptUrl ?? null,
         recurringId ?? null,
+        walletId ?? null,
       ],
     );
 

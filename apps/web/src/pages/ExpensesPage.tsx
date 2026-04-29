@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { expensesApi, categoriesApi } from '../lib/api';
-import type { Expense, Category, PaginatedResult } from '@ledgr/types';
+import { useNavigate } from 'react-router-dom';
+import {
+  SwipeableList,
+  SwipeableListItem,
+  SwipeAction,
+  TrailingActions,
+  Type as ListType,
+} from 'react-swipeable-list';
+import 'react-swipeable-list/dist/styles.css';
+import { expensesApi, categoriesApi, walletsApi, incomeApi } from '../lib/api';
+import type { Expense, Category, PaginatedResult, Wallet, Income } from '@ledgr/types';
 import ExpenseForm from '../components/ExpenseForm';
 import DatePicker from '../components/DatePicker';
 import BottomSheet from '../components/BottomSheet';
@@ -25,17 +34,41 @@ function dateGroupLabel(iso: string): string {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-/** Group a sorted expense array by date, preserving order */
-function groupByDate(expenses: Expense[]): { label: string; items: Expense[] }[] {
-  const groups: { label: string; items: Expense[] }[] = [];
+// Unified transaction type for the list
+type TxItem =
+  | { kind: 'expense'; data: Expense; dateKey: string; sortKey: string }
+  | { kind: 'income';  data: Income;  dateKey: string; sortKey: string };
+
+/** Merge and sort expenses + income entries newest-first */
+function buildTransactions(expenses: Expense[], incomeEntries: Income[]): TxItem[] {
+  const items: TxItem[] = [
+    ...expenses.map((e): TxItem => ({
+      kind: 'expense',
+      data: e,
+      dateKey: e.date,
+      sortKey: `${e.date}T${e.createdAt.slice(11)}`,
+    })),
+    ...incomeEntries.map((i): TxItem => ({
+      kind: 'income',
+      data: i,
+      dateKey: i.createdAt.slice(0, 10),
+      sortKey: i.createdAt,
+    })),
+  ];
+  return items.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+}
+
+/** Group a sorted transaction array by date */
+function groupByDate(items: TxItem[]): { label: string; items: TxItem[] }[] {
+  const groups: { label: string; items: TxItem[] }[] = [];
   const seen = new Map<string, number>();
-  for (const e of expenses) {
-    const label = dateGroupLabel(e.date);
+  for (const item of items) {
+    const label = dateGroupLabel(item.dateKey);
     if (seen.has(label)) {
-      groups[seen.get(label)!].items.push(e);
+      groups[seen.get(label)!].items.push(item);
     } else {
       seen.set(label, groups.length);
-      groups.push({ label, items: [e] });
+      groups.push({ label, items: [item] });
     }
   }
   return groups;
@@ -122,103 +155,125 @@ function DeleteDialog({ expense, onCancel, onConfirm, isPending, error }: {
   );
 }
 
-// ─── Mobile expense row ───────────────────────────────────────────────────────
-// Tap = edit, hold the ⋯ button to reveal delete. No overlapping absolute elements.
+// ─── Source badge ─────────────────────────────────────────────────────────────
+
+function SourceBadge({ walletName }: { walletName: string | null }) {
+  if (walletName) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/20 leading-none">
+        <span className="text-gray-400 dark:text-gray-500 font-normal">from</span>
+        <BrandLogo label={walletName} size={12} />
+        {walletName}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-500/20 leading-none">
+      <span className="font-normal">from</span> 🏦 Salary
+    </span>
+  );
+}
+// ─── Mobile income row (read-only, no swipe) ─────────────────────────────────
+
+function MobileIncomeRow({ income }: { income: Income }) {
+  const { formatMoney } = useSettings();
+  const dateStr = new Date(income.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+  return (
+    <li className="border-b border-black/[0.05] dark:border-white/[0.05] last:border-0">
+      <div className="flex w-full items-center gap-3 px-4 py-3 bg-white/50 dark:bg-[#161626]">
+        <BrandLogo label={income.label} size={40} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{income.label}</p>
+          <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">
+            {income.recurringId ? '🔁 Recurring income' : '💰 Income'} · {dateStr}
+          </p>
+        </div>
+        <span className="shrink-0 text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+          +{formatMoney(income.amount)}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+// ─── Mobile expense row — swipe left to delete (react-swipeable-list) ────────
 
 function MobileExpenseRow({
   expense,
   category,
+  walletName,
   isExiting,
   onEdit,
   onDelete,
 }: {
   expense: Expense;
   category: Category | undefined;
+  walletName: string | null;
   isExiting: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const { formatMoney } = useSettings();
-  const [showDelete, setShowDelete] = useState(false);
+
+  const trailingActions = () => (
+    <TrailingActions>
+      <SwipeAction onClick={onDelete}>
+        <div className="flex flex-col items-center justify-center gap-0.5 h-full w-20 bg-red-500 text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span className="text-[10px] font-semibold">Delete</span>
+        </div>
+      </SwipeAction>
+    </TrailingActions>
+  );
 
   return (
     <li className={`border-b border-black/[0.05] dark:border-white/[0.05] last:border-0 ${isExiting ? 'item-exit' : 'item-enter'}`}>
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Icon */}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl"
-          aria-label={`Edit ${expense.description ?? category?.name ?? 'expense'}`}
-          tabIndex={-1}
-        >
-          {expense.description && getDomainFromLabel(expense.description)
-            ? <BrandLogo label={expense.description} size={40} />
-            : <span
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-white/90 border border-black/[0.07] dark:border-white/[0.10] shadow-sm shadow-black/[0.04] text-lg"
-                aria-hidden="true"
-              >
-                {category?.icon ?? '💸'}
-              </span>
-          }
-        </button>
-
-        {/* Content — tappable to edit */}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-lg"
-          aria-label={`Edit ${expense.description ?? category?.name ?? 'expense'}`}
-        >
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
-              {expense.description ?? category?.name ?? '—'}
-            </p>
-            {expense.recurringId && <RecurringIcon />}
-            {expense.receiptUrl && <ReceiptIcon />}
+      <SwipeableListItem
+        trailingActions={trailingActions()}
+        destructiveCallbackDelay={300}
+        threshold={0.3}
+        onClick={onEdit}
+      >
+        <div className="flex w-full items-center gap-3 px-4 py-3 bg-white/50 dark:bg-[#161626]">
+          {/* Icon */}
+          <div className="shrink-0">
+            {expense.description && getDomainFromLabel(expense.description)
+              ? <BrandLogo label={expense.description} size={40} />
+              : <span
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-white/90 border border-black/[0.07] dark:border-white/[0.10] shadow-sm shadow-black/[0.04] text-lg"
+                  aria-hidden="true"
+                >
+                  {category?.icon ?? '💸'}
+                </span>
+            }
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
-            {category?.name ?? ''}
-          </p>
-        </button>
 
-        {/* Right side: amount + action */}
-        <div className="shrink-0 flex flex-col items-end gap-1.5">
-          <span className="text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">
-            {formatMoney(expense.amount)}
-          </span>
-
-          {showDelete ? (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => { setShowDelete(false); onDelete(); }}
-                className="rounded-lg px-2 py-0.5 text-[11px] font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors focus:outline-none"
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDelete(false)}
-                className="rounded-lg px-2 py-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 border border-black/10 dark:border-white/10 hover:bg-black/[0.04] transition-colors focus:outline-none"
-              >
-                Cancel
-              </button>
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
+                {expense.description ?? category?.name ?? '—'}
+              </p>
+              {expense.recurringId && <RecurringIcon />}
+              {expense.receiptUrl && <ReceiptIcon />}
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowDelete(true)}
-              className="rounded-lg p-1 text-gray-300 dark:text-gray-600 hover:text-red-400 hover:bg-red-50/80 dark:hover:bg-red-900/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-              aria-label={`Delete ${expense.description ?? category?.name ?? 'expense'}`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </button>
-          )}
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {category?.name && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{category.name}</p>
+              )}
+              {category?.name && <span className="text-gray-300 dark:text-gray-600 text-xs" aria-hidden="true">·</span>}
+              <SourceBadge walletName={walletName} />
+            </div>
+          </div>
+
+          {/* Amount */}
+          <span className="shrink-0 text-sm font-bold text-red-500 dark:text-red-400 tabular-nums">
+            −{formatMoney(expense.amount)}
+          </span>
         </div>
-      </div>
+      </SwipeableListItem>
     </li>
   );
 }
@@ -227,12 +282,17 @@ function MobileExpenseRow({
 
 export default function ExpensesPage() {
   const { formatMoney } = useSettings();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [showForm, setShowForm] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Current month for income entries
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
 
   const { exitingIds, triggerDelete: triggerDeleteExpense } = useAnimatedDelete(['expenses']);
 
@@ -257,8 +317,8 @@ export default function ExpensesPage() {
     onError: (err: unknown) => setDeleteError(err instanceof Error ? err.message : 'Failed to delete expense.'),
   });
 
-  function openEdit(expense: Expense) { setEditingExpense(expense); setShowForm(true); }
-  function closeForm() { setShowForm(false); setEditingExpense(undefined); }
+  function openEdit(expense: Expense) { navigate(`/expenses/${expense.id}`); }
+  function closeForm() { setShowForm(false); }
   function closeDelete() { if (deleteMutation.isPending) return; setDeletingExpense(null); setDeleteError(null); }
 
   const { data: expensesData, isLoading: expensesLoading, isError: expensesError, refetch } = useQuery<PaginatedResult<Expense>>({
@@ -271,7 +331,24 @@ export default function ExpensesPage() {
     queryFn: () => categoriesApi.list().then((r) => r.data),
     staleTime: 10 * 60 * 1000, // categories rarely change
   });
+  const { data: wallets = [] } = useQuery<Wallet[]>({
+    queryKey: ['wallets'],
+    queryFn: () => walletsApi.list().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  // Income entries for current month — shown alongside expenses
+  const { data: incomeEntries = [] } = useQuery<Income[]>({
+    queryKey: ['income-entries', year, month],
+    queryFn: () => incomeApi.listEntries(year, month).then((r) => r.data),
+    staleTime: 2 * 60 * 1000,
+  });
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  const walletMap = new Map(wallets.map((w) => [w.id, w]));
+
+  // Only merge income when no date filter is active (income has no date field to filter by)
+  const mergedIncome = (!filters.from && !filters.to) ? incomeEntries : [];
+  const transactions = expensesData ? buildTransactions(expensesData.data, mergedIncome) : [];
+  const groups = groupByDate(transactions);
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
@@ -287,10 +364,9 @@ export default function ExpensesPage() {
   const hasActiveFilters = !!filters.from || !!filters.to || (filters.categoryIds?.length ?? 0) > 0;
   const totalPages = expensesData ? Math.max(1, Math.ceil(expensesData.total / filters.pageSize)) : 1;
 
-  // Page-level total (sum of current page only — labeled clearly)
+  // Page-level total (expenses only — income is additive, shown separately)
   const pageTotal = expensesData?.data.reduce((sum, e) => sum + e.amount, 0) ?? 0;
   const hasMultiplePages = totalPages > 1;
-  const groups = expensesData ? groupByDate(expensesData.data) : [];
 
   return (
     <div className="space-y-5">
@@ -311,7 +387,7 @@ export default function ExpensesPage() {
                 Clear
               </button>
             )}
-            <button type="button" onClick={() => { setEditingExpense(undefined); setShowForm(true); }}
+            <button type="button" onClick={() => { setShowForm(true); }}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors focus:outline-none shadow-sm shadow-indigo-500/20">
               + Add
             </button>
@@ -366,12 +442,12 @@ export default function ExpensesPage() {
               Retry
             </button>
           </div>
-        ) : !expensesData?.data.length ? (
+        ) : !expensesData?.data.length && groups.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <p className="text-sm text-gray-400 dark:text-gray-500 mb-1">No expenses found.</p>
             {hasActiveFilters
               ? <p className="text-xs text-gray-400 dark:text-gray-500">Try adjusting or clearing your filters.</p>
-              : <button type="button" onClick={() => { setEditingExpense(undefined); setShowForm(true); }}
+              : <button type="button" onClick={() => { setShowForm(true); }}
                   className="mt-1 text-sm text-indigo-500 dark:text-indigo-400 hover:underline focus:outline-none">
                   Add your first expense
                 </button>
@@ -386,6 +462,7 @@ export default function ExpensesPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Date</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Description</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">From</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Amount</th>
                   <th className="px-4 py-3 w-16"><span className="sr-only">Actions</span></th>
                 </tr>
@@ -394,48 +471,77 @@ export default function ExpensesPage() {
                 {groups.map(({ label, items }) => (
                   <React.Fragment key={label}>
                     <tr aria-hidden="true">
-                      <td colSpan={5} className="px-4 pt-3 pb-1">
+                      <td colSpan={6} className="px-4 pt-3 pb-1">
                         <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
                       </td>
                     </tr>
-                    {items.map((expense) => (
-                      <tr key={expense.id} onClick={() => openEdit(expense)}
-                        className={`group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors ${exitingIds.has(expense.id) ? 'item-exit' : 'item-enter'}`}
-                        tabIndex={0} role="button"
-                        aria-label={`Edit expense: ${expense.description ?? formatDate(expense.date)}`}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}>
-                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(expense.date)}</td>
-                        <td className="px-4 py-3"><CategoryBadge category={categoryMap.get(expense.categoryId)} /></td>
-                        <td className="px-4 py-3 text-gray-700 dark:text-gray-200 max-w-xs">
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span className="truncate">{expense.description ?? <span className="text-gray-400">—</span>}</span>
-                            {expense.recurringId && <RecurringIcon />}
-                            {expense.receiptUrl && <ReceiptIcon />}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100 tabular-nums whitespace-nowrap">{formatMoney(expense.amount)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
-                            <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Edit</span>
-                            <button type="button" onClick={(e) => { e.stopPropagation(); deleteExpense(expense.id); }}
-                              className="rounded-lg p-1 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-all focus:outline-none"
-                              aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((tx) => {
+                      if (tx.kind === 'income') {
+                        const inc = tx.data;
+                        const incDate = new Date(inc.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+                        return (
+                          <tr key={`i-${inc.id}`} className="item-enter">
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{incDate}</td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                {inc.recurringId ? '🔁 Recurring' : '💰 Income'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{inc.label}</td>
+                            <td className="px-4 py-3">
+                              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">+ Added</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums whitespace-nowrap">
+                              +{formatMoney(inc.amount)}
+                            </td>
+                            <td />
+                          </tr>
+                        );
+                      }
+                      const expense = tx.data;
+                      const walletName = expense.walletId ? (walletMap.get(expense.walletId)?.name ?? null) : null;
+                      return (
+                        <tr key={`e-${expense.id}`} onClick={() => openEdit(expense)}
+                          className={`group cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors ${exitingIds.has(expense.id) ? 'item-exit' : 'item-enter'}`}
+                          tabIndex={0} role="button"
+                          aria-label={`View expense: ${expense.description ?? formatDate(expense.date)}`}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(expense); } }}>
+                          <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(expense.date)}</td>
+                          <td className="px-4 py-3"><CategoryBadge category={categoryMap.get(expense.categoryId)} /></td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-200 max-w-xs">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="truncate">{expense.description ?? <span className="text-gray-400">—</span>}</span>
+                              {expense.recurringId && <RecurringIcon />}
+                              {expense.receiptUrl && <ReceiptIcon />}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3"><SourceBadge walletName={walletName} /></td>
+                          <td className="px-4 py-3 text-right font-semibold text-red-500 dark:text-red-400 tabular-nums whitespace-nowrap">
+                            −{formatMoney(expense.amount)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                              <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">View</span>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); deleteExpense(expense.id); }}
+                                className="rounded-lg p-1 text-gray-400 hover:bg-red-50/80 hover:text-red-500 transition-all focus:outline-none"
+                                aria-label={`Delete expense: ${expense.description ?? formatDate(expense.date)}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </React.Fragment>
                 ))}
               </tbody>
               {/* Total footer row */}
               <tfoot>
                 <tr className="border-t border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02]">
-                  <td colSpan={3} className="px-4 py-3 text-xs font-medium text-gray-400 dark:text-gray-500">
-                    {hasMultiplePages ? `Page ${filters.page} total` : `Total · ${expensesData.data.length} expense${expensesData.data.length !== 1 ? 's' : ''}`}
+                  <td colSpan={4} className="px-4 py-3 text-xs font-medium text-gray-400 dark:text-gray-500">
+                    {hasMultiplePages ? `Page ${filters.page} total` : `Total · ${expensesData?.data.length ?? 0} expense${(expensesData?.data.length ?? 0) !== 1 ? 's' : ''}`}
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatMoney(pageTotal)}</td>
                   <td />
@@ -444,33 +550,38 @@ export default function ExpensesPage() {
             </table>
 
             {/* Mobile list — date-grouped sections, individual rows */}
-            <ul className="md:hidden">
+            <SwipeableList type={ListType.IOS} Tag="ul" className="md:hidden">
               {groups.map(({ label, items }) => (
                 <React.Fragment key={label}>
                   {/* Date section header */}
                   <li className="sticky top-0 z-10 px-4 py-2 bg-black/[0.03] dark:bg-white/[0.03] backdrop-blur-sm border-b border-black/[0.05] dark:border-white/[0.05]">
                     <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">{label}</span>
                   </li>
-                  {items.map((expense) => (
-                    <MobileExpenseRow
-                      key={expense.id}
-                      expense={expense}
-                      category={categoryMap.get(expense.categoryId)}
-                      isExiting={exitingIds.has(expense.id)}
-                      onEdit={() => openEdit(expense)}
-                      onDelete={() => deleteExpense(expense.id)}
-                    />
-                  ))}
+                  {items.map((tx) =>
+                    tx.kind === 'income' ? (
+                      <MobileIncomeRow key={`i-${tx.data.id}`} income={tx.data} />
+                    ) : (
+                      <MobileExpenseRow
+                        key={`e-${tx.data.id}`}
+                        expense={tx.data}
+                        category={categoryMap.get(tx.data.categoryId)}
+                        walletName={tx.data.walletId ? (walletMap.get(tx.data.walletId)?.name ?? null) : null}
+                        isExiting={exitingIds.has(tx.data.id)}
+                        onEdit={() => openEdit(tx.data)}
+                        onDelete={() => setDeletingExpense(tx.data)}
+                      />
+                    )
+                  )}
                 </React.Fragment>
               ))}
               {/* Mobile total footer */}
               <li className="flex items-center justify-between px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/[0.06] dark:border-white/[0.06]">
                 <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
-                  {hasMultiplePages ? `Page ${filters.page} total` : `${expensesData.data.length} expense${expensesData.data.length !== 1 ? 's' : ''}`}
+                  {hasMultiplePages ? `Page ${filters.page} total` : `${expensesData?.data.length ?? 0} expense${(expensesData?.data.length ?? 0) !== 1 ? 's' : ''}`}
                 </span>
                 <span className="text-sm font-bold text-gray-800 dark:text-gray-100 tabular-nums">{formatMoney(pageTotal)}</span>
               </li>
-            </ul>
+            </SwipeableList>
           </>
         )}
       </div>
@@ -496,8 +607,8 @@ export default function ExpensesPage() {
       )}
 
       {/* Expense form modal */}
-      <BottomSheet open={showForm} onClose={closeForm} title={editingExpense ? 'Edit expense' : 'Add expense'}>
-        <ExpenseForm expense={editingExpense} onSuccess={closeForm} onCancel={closeForm} />
+      <BottomSheet open={showForm} onClose={closeForm} title="Add expense">
+        <ExpenseForm onSuccess={closeForm} onCancel={closeForm} />
       </BottomSheet>
 
       {deletingExpense && (

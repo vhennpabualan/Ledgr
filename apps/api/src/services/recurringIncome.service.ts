@@ -212,18 +212,20 @@ export async function processDueRecurringIncome(userId?: string): Promise<number
       const month = dueDate.getMonth() + 1;
 
       // Avoid duplicate: check if an income entry from this recurring template already exists
-      // for this exact due date period
+      // for this exact due date. Use the ISO date string as a stable dedup key stored in label
+      // metadata — instead of year+month which breaks biweekly (2 payouts/month).
+      const dueDateStr = rec.nextDueDate; // e.g. "2026-04-29"
       const { rows: existing } = await client.query(
         `SELECT id FROM income
-         WHERE user_id = $1 AND recurring_id = $2 AND year = $3 AND month = $4`,
-        [rec.userId, rec.id, year, month],
+         WHERE user_id = $1 AND recurring_id = $2 AND due_date = $3`,
+        [rec.userId, rec.id, dueDateStr],
       );
 
       if (existing.length === 0) {
         await client.query(
-          `INSERT INTO income (user_id, amount, currency, year, month, label, recurring_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [rec.userId, rec.amount, rec.currency, year, month, rec.label, rec.id],
+          `INSERT INTO income (user_id, amount, currency, year, month, label, recurring_id, due_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [rec.userId, rec.amount, rec.currency, year, month, rec.label, rec.id, dueDateStr],
         );
         created++;
       }

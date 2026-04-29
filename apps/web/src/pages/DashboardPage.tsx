@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { reportsApi, expensesApi, budgetsApi, incomeApi, categoriesApi, walletsApi } from '../lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { reportsApi, expensesApi, budgetsApi, incomeApi, categoriesApi, walletsApi, recurringIncomeApi } from '../lib/api';
 import type { ReportSummary, TrendPoint, Expense, BalanceSummary, Category, Budget, Wallet } from '@ledgr/types';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
@@ -162,6 +162,23 @@ export default function DashboardPage() {
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showAllBudgets, setShowAllBudgets] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Trigger recurring income processing on every dashboard load.
+  // This is the "cron" substitute — fires once per mount, silently.
+  const processMutation = useMutation({
+    mutationFn: () => recurringIncomeApi.process(),
+    onSuccess: (res) => {
+      if (res.data.created > 0) {
+        // New income entries were created — refresh balance
+        queryClient.invalidateQueries({ queryKey: ['dashboard-balance'] });
+      }
+    },
+  });
+  useEffect(() => {
+    processMutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {

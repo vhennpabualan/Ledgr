@@ -41,7 +41,8 @@ export default function LoginPage() {
 
         if (!regRes.ok) {
           const body = await regRes.json().catch(() => ({}));
-          throw new Error(body.message ?? 'Registration failed');
+          const detail = body.fields ? Object.values(body.fields).join(', ') : body.message;
+          throw new Error(detail ?? `Registration failed (HTTP ${regRes.status})`);
         }
       }
 

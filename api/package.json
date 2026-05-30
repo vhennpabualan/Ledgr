@@ -1,24 +1,18 @@
 {
-  "name": "ledgr",
-  "version": "1.4.3",
+  "name": "ledgr-api",
+  "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:api": "cd api && npx nodemon",
-    "build": "tsc && vite build",
-    "build:api": "cd api && npx tsc --project tsconfig.json",
-    "preview": "vite preview",
-    "lint": "eslint src --ext .ts,.tsx"
+    "dev": "nodemon",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",
     "@aws-sdk/s3-request-presigner": "^3.1030.0",
     "@google/generative-ai": "^0.24.1",
-    "@tanstack/react-query": "^5.99.0",
-    "axios": "^1.15.0",
     "bcryptjs": "^3.0.3",
-    "clsx": "^2.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -27,14 +21,7 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.20.0",
-    "prop-types": "15.8.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.3",
-    "react-swipeable-list": "1.10.0",
-    "recharts": "^3.8.1",
     "serverless-http": "^3.2.0",
-    "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -46,20 +33,12 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^20.19.39",
     "@types/pg": "^8.20.0",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react-swc": "^3.7.0",
-    "autoprefixer": "^10.4.19",
     "eslint": "^9.5.0",
     "nodemon": "^3.1.4",
-    "postcss": "^8.4.39",
     "prettier": "^3.3.2",
-    "tailwindcss": "^3.4.4",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.5.2",
-    "vite": "^6.3.0",
-    "vite-plugin-pwa": "^0.21.0"
+    "typescript": "^5.5.2"
   }
 }

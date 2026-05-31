@@ -83,4 +83,13 @@ if (!process.env.VERCEL) {
   });
 }
 
-export const handler = serverless(app);
+const wrappedHandler = serverless(app);
+
+export const handler = async (req: unknown, context: unknown) => {
+  try {
+    return await wrappedHandler(req, context);
+  } catch (err) {
+    const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    return { statusCode: 500, headers: { 'Content-Type': 'text/plain' }, body: message };
+  }
+};

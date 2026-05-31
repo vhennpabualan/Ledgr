@@ -10,7 +10,6 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET_NAME: z.string().optional(),
   R2_PUBLIC_URL: z.string().optional(),
-  // Optional — if not set, receipt scanning is disabled
   GEMINI_API_KEY: z.string().optional(),
   PORT: z
     .string()
@@ -24,10 +23,7 @@ const envSchema = z.object({
 const result = envSchema.safeParse(process.env);
 
 if (!result.success) {
-  const missing = result.error.issues
-    .map((i) => `  ${i.path.join('.')}: ${i.message}`)
-    .join('\n');
-  throw new Error(`Invalid environment variables:\n${missing}`);
+  throw new Error(`Invalid env: ${result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`);
 }
 
 export const env = result.data;

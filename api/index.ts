@@ -56,40 +56,10 @@ app.use('/api/recurring-income', recurringIncomeRouter);
 
 app.use(errorHandler);
 
-let server: ReturnType<typeof app.listen> | null = null;
-
-async function shutdown(signal: string) {
-  logger.info(`Received ${signal}, starting graceful shutdown`);
-  if (server) {
-    server.close(() => {
-      logger.info('HTTP server closed');
-    });
-  }
-  try {
-    await pool.end();
-    logger.info('Database pool closed');
-  } catch (err) {
-    logger.error('Error closing database pool', err);
-  }
-  process.exit(0);
-}
-
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
-
 if (!process.env.VERCEL) {
-  server = app.listen(PORT, () => {
+  app.listen(PORT, () => {
     logger.info(`API running on port ${PORT}`, { nodeEnv: env.NODE_ENV });
   });
 }
 
-const wrappedHandler = serverless(app);
-
-export const handler = async (req: unknown, context: unknown) => {
-  try {
-    return await wrappedHandler(req, context);
-  } catch (err) {
-    const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    return { statusCode: 500, headers: { 'Content-Type': 'text/plain' }, body: message };
-  }
-};
+export const handler = serverless(app);

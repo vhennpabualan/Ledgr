@@ -6,19 +6,19 @@ import {
   CreateExpenseSchema,
   UpdateExpenseSchema,
   ExpenseFiltersSchema,
-} from '../types/schemas.js';
+} from '../types/schemas';
 import {
   createExpense,
   listExpenses,
   getExpense,
   updateExpense,
   deleteExpense,
-} from '../services/expense.service.js';
-import { generatePresignedUploadUrl, deleteReceiptByUrl } from '../services/storage.service.js';
-import { scanReceipt } from '../services/receiptScan.service.js';
-import { requireAuth } from '../middleware/requireAuth.js';
-import { env } from '../config/env.js';
-import { logger } from '../lib/logger.js';
+} from '../services/expense.service';
+import { generatePresignedUploadUrl, deleteReceiptByUrl } from '../services/storage.service';
+import { scanReceipt } from '../services/receiptScan.service';
+import { requireAuth } from '../middleware/requireAuth';
+import { env } from '../config/env';
+import { logger } from '../lib/logger';
 
 export const expenseRouter = Router();
 expenseRouter.use(requireAuth);

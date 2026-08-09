@@ -2,13 +2,13 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { LoginSchema } from '../types/schemas.js';
-import { register, login, refresh, logout } from '../services/auth.service.js';
-import { requireAuth } from '../middleware/requireAuth.js';
-import { authRateLimit } from '../middleware/rateLimit.js';
-import { env } from '../config/env.js';
-import { pool } from '../db/client.js';
-import { logger } from '../lib/logger.js';
+import { LoginSchema } from '../types/schemas';
+import { register, login, refresh, logout } from '../services/auth.service';
+import { requireAuth } from '../middleware/requireAuth';
+import { authRateLimit } from '../middleware/rateLimit';
+import { env } from '../config/env';
+import { pool } from '../db/client';
+import { logger } from '../lib/logger';
 
 export const authRouter = Router();
 

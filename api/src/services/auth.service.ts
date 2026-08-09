@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { pool } from '../db/client.js';
-import { env } from '../config/env.js';
-import { AppError } from '../lib/errors.js';
+import { pool } from '../db/client';
+import { env } from '../config/env';
+import { AppError } from '../lib/errors';
 import type { AuthTokens, Credentials, TokenPayload } from '../types';
 
 // ─── Token helpers ────────────────────────────────────────────────────────────

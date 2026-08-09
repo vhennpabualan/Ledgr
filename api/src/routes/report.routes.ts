@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth.js';
-import { getSummary, getTrend, exportCSV } from '../services/report.service.js';
+import { requireAuth } from '../middleware/requireAuth';
+import { getSummary, getTrend, exportCSV } from '../services/report.service';
 
 export const reportRouter = Router();
 

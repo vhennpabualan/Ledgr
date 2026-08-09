@@ -1,5 +1,5 @@
-import { pool } from '../db/client.js';
-import { sumPendingItems } from './pendingItems.service.js';
+import { pool } from '../db/client';
+import { sumPendingItems } from './pendingItems.service';
 import type { Income, UpsertIncomeDTO } from '../types';
 
 function rowToIncome(row: Record<string, unknown>): Income {

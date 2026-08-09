@@ -8,7 +8,7 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { pool } from './client.js';
+import { pool } from './client';
 
 const MIGRATIONS = [
   '001_initial_schema.sql',

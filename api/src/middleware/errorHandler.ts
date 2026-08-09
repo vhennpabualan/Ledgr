@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { AppError } from '../lib/errors.js';
-import { env } from '../config/env.js';
-import { logger } from '../lib/logger.js';
+import { AppError } from '../lib/errors';
+import { env } from '../config/env';
+import { logger } from '../lib/logger';
 
 const STATUS_TO_CODE: Record<number, string> = {
   400: 'VALIDATION_ERROR',

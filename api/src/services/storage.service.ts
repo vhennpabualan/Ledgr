@@ -1,7 +1,7 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { env } from '../config/env.js';
-import { AppError } from '../lib/errors.js';
+import { env } from '../config/env';
+import { AppError } from '../lib/errors';
 
 function getS3Client(): S3Client {
   if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) {

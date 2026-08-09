@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { CreateCategorySchema } from '../types/schemas.js';
+import { CreateCategorySchema } from '../types/schemas';
 import {
   listCategories,
   createCategory,
@@ -9,8 +9,8 @@ import {
   restoreCategory,
   updateCategory,
   deleteCategory,
-} from '../services/category.service.js';
-import { requireAuth } from '../middleware/requireAuth.js';
+} from '../services/category.service';
+import { requireAuth } from '../middleware/requireAuth';
 
 // Extend the partial schema to accept isArchived for the archive action
 const PatchCategorySchema = CreateCategorySchema.partial().extend({

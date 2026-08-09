@@ -1,5 +1,5 @@
-import { pool } from '../db/client.js';
-import { AppError } from '../lib/errors.js';
+import { pool } from '../db/client';
+import { AppError } from '../lib/errors';
 import type { Wallet, CreateWalletDTO, UpdateWalletDTO } from '../types';
 
 function rowToWallet(row: Record<string, unknown>): Wallet {

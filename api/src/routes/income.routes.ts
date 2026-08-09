@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth } from '../middleware/requireAuth';
 import {
   listIncome,
   addIncome,
@@ -11,7 +11,7 @@ import {
   // legacy
   upsertIncome,
   getIncome,
-} from '../services/income.service.js';
+} from '../services/income.service';
 
 export const incomeRouter = Router();
 incomeRouter.use(requireAuth);

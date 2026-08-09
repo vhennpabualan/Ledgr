@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
-import { pool } from '../db/client.js';
-import { AppError } from '../lib/errors.js';
-import { adjustWalletBalance } from './wallet.service.js';
+import { pool } from '../db/client';
+import { AppError } from '../lib/errors';
+import { adjustWalletBalance } from './wallet.service';
 import type { Expense, LedgerEntry, PaginatedResult } from '../types';
 import type { CreateExpenseInput, UpdateExpenseInput, ExpenseFiltersInput } from '../types';
 

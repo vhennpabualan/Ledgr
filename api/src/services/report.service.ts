@@ -1,5 +1,5 @@
-import { pool } from '../db/client.js';
-import { rowToExpense } from './expense.service.js';
+import { pool } from '../db/client';
+import { rowToExpense } from './expense.service';
 import type { ReportSummary, TrendPoint, CategoryBreakdown, Expense } from '../types';
 
 // ─── CSV helpers ──────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth } from '../middleware/requireAuth';
 import {
   listRecurringIncome,
   getRecurringIncome,
@@ -10,7 +10,7 @@ import {
   deleteRecurringIncome,
   processDueRecurringIncome,
   previewNextDates,
-} from '../services/recurringIncome.service.js';
+} from '../services/recurringIncome.service';
 
 export const recurringIncomeRouter = Router();
 recurringIncomeRouter.use(requireAuth);

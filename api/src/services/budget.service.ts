@@ -1,7 +1,7 @@
-import { pool } from '../db/client.js';
-import { AppError } from '../lib/errors.js';
-import { appendLedgerEntry } from './expense.service.js';
-import { sumPendingSpend } from './pendingSpend.service.js';
+import { pool } from '../db/client';
+import { AppError } from '../lib/errors';
+import { appendLedgerEntry } from './expense.service';
+import { sumPendingSpend } from './pendingSpend.service';
 import type { Budget, BudgetStatus } from '../types';
 import type { CreateBudgetInput } from '../types';
 

@@ -9,9 +9,9 @@ import {
   deleteRecurring,
   togglePauseRecurring,
   processDueRecurring,
-} from '../services/recurring.service.js';
-import { requireAuth } from '../middleware/requireAuth.js';
-import { logger } from '../lib/logger.js';
+} from '../services/recurring.service';
+import { requireAuth } from '../middleware/requireAuth';
+import { logger } from '../lib/logger';
 
 export const recurringRouter = Router();
 

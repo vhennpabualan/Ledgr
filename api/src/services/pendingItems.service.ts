@@ -1,5 +1,5 @@
-import { pool } from '../db/client.js';
-import { AppError } from '../lib/errors.js';
+import { pool } from '../db/client';
+import { AppError } from '../lib/errors';
 import type { PendingItem } from '../types';
 
 function rowToItem(row: Record<string, unknown>): PendingItem {

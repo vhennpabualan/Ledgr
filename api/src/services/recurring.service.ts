@@ -1,6 +1,6 @@
-import { pool } from '../db/client.js';
-import { AppError } from '../lib/errors.js';
-import { createExpense } from './expense.service.js';
+import { pool } from '../db/client';
+import { AppError } from '../lib/errors';
+import { createExpense } from './expense.service';
 import type { RecurringExpense, CreateRecurringDTO, UpdateRecurringDTO } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

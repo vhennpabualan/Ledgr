@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { CreateBudgetSchema } from '../types/schemas.js';
-import { createBudget, listBudgets, getBudgetStatus, deleteBudget, copyBudgets } from '../services/budget.service.js';
-import { listPendingSpend, createPendingSpend, deletePendingSpend } from '../services/pendingSpend.service.js';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { CreateBudgetSchema } from '../types/schemas';
+import { createBudget, listBudgets, getBudgetStatus, deleteBudget, copyBudgets } from '../services/budget.service';
+import { listPendingSpend, createPendingSpend, deletePendingSpend } from '../services/pendingSpend.service';
+import { requireAuth } from '../middleware/requireAuth';
 
 export const budgetRouter = Router();
 

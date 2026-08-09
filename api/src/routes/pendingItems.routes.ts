@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth } from '../middleware/requireAuth';
 import {
   listPendingItems,
   createPendingItem,
   deletePendingItem,
   deliverPendingItem,
-} from '../services/pendingItems.service.js';
+} from '../services/pendingItems.service';
 
 export const pendingItemsRouter = Router();
 pendingItemsRouter.use(requireAuth);

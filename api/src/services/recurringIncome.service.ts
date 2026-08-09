@@ -1,4 +1,4 @@
-import { pool } from '../db/client.js';
+import { pool } from '../db/client';
 import type { RecurringIncome, CreateRecurringIncomeDTO, UpdateRecurringIncomeDTO } from '../types';
 
 function rowToRecurringIncome(row: Record<string, unknown>): RecurringIncome {

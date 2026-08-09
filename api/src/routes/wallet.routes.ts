@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/requireAuth.js';
-import { listWallets, createWallet, updateWallet, deleteWallet } from '../services/wallet.service.js';
+import { requireAuth } from '../middleware/requireAuth';
+import { listWallets, createWallet, updateWallet, deleteWallet } from '../services/wallet.service';
 
 const CreateWalletSchema = z.object({
   name: z.string().trim().min(1).max(100),

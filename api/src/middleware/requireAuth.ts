@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { validateToken } from '../services/auth.service.js';
+import { validateToken } from '../services/auth.service';
 
 export async function requireAuth(
   req: Request,

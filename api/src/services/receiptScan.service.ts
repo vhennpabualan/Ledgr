@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { env } from '../config/env.js';
+import { env } from '../config/env';
 
 export interface ScanResult {
   amount: number | null;       // minor units (centavos), null if not found

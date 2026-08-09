@@ -76,9 +76,18 @@ export function rateLimit(options: RateLimitOptions) {
 }
 
 // Pre-configured limiters for common use cases
+function toPositiveInt(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+// Auth endpoints are also hit by the refresh-on-page-load flow, so the default
+// limit is bumped from 10 → 30 and made env-tunable (AUTH_RATE_LIMIT_MAX /
+// AUTH_RATE_LIMIT_WINDOW_MS) without a redeploy. Counters live per warm instance,
+// so these are a coarse guard, not a hard security boundary.
 export const authRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts per 15 min per IP
+  windowMs: toPositiveInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000), // default 15 minutes
+  max: toPositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 30), // default 30 attempts per window per IP
   keyPrefix: 'auth',
   message: 'Too many authentication attempts. Please try again in 15 minutes.',
   skipInDev: true,

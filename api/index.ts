@@ -3,7 +3,6 @@ import 'express-async-errors';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import serverless from 'serverless-http';
 import { env } from './src/config/env.js';
 import { logger } from './src/lib/logger.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
@@ -31,7 +30,9 @@ app.use(requestId);
 const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://localhost:3000').split(',');
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
-app.get('/health', async (_req, res) => {
+// Health endpoint — exposed at /health (local dev) and /api/health (Vercel /api rewrite).
+// Deliberately kept outside the /api rate limiter and auth so it's always reachable.
+const healthHandler: express.RequestHandler = async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok', db: 'connected' });
@@ -39,7 +40,10 @@ app.get('/health', async (_req, res) => {
     logger.error('Health check failed', err);
     res.status(503).json({ status: 'degraded', db: 'disconnected' });
   }
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.use('/api', devRateLimit);
 
@@ -54,6 +58,15 @@ app.use('/api/recurring',  recurringRouter);
 app.use('/api/wallets',    walletRouter);
 app.use('/api/recurring-income', recurringIncomeRouter);
 
+// JSON 404 for unmatched /api/* paths — makes routing issues visible instead of HTML 404s
+app.use((req, res) => {
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({ error: 'NOT_FOUND', path: req.originalUrl });
+    return;
+  }
+  res.status(404).send('Not found');
+});
+
 app.use(errorHandler);
 
 if (!process.env.VERCEL) {
@@ -62,4 +75,5 @@ if (!process.env.VERCEL) {
   });
 }
 
-export const handler = serverless(app);
+// Vercel: zero-config Node function at /api via a default-exported Express app.
+export default app;

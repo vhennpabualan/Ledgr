@@ -134,7 +134,11 @@ function AddForm({ year, month, onAdded }: AddFormProps) {
     if (!amount || isNaN(num) || num <= 0) { setError('Enter a valid amount.'); return; }
     if (repeats && !startDate) { setError('Pick a start date.'); return; }
     setError('');
-    repeats ? addRecurring.mutate() : addOnce.mutate();
+    if (repeats) {
+      addRecurring.mutate();
+    } else {
+      addOnce.mutate();
+    }
   }
 
   const isPending = addOnce.isPending || addRecurring.isPending;
@@ -164,7 +168,6 @@ function AddForm({ year, month, onAdded }: AddFormProps) {
         value={amount}
         onChange={(e) => { setAmount(e.target.value); setError(''); }}
         className={inp}
-        // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
       />
 

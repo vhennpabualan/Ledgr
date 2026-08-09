@@ -580,7 +580,7 @@ export default function BudgetsPage() {
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setDeletingId(null)} aria-hidden="true" />
           <div className={`relative z-10 w-full max-w-sm ${glass} p-6`}>
             <h2 id="delete-budget-title" className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete budget?</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">This will permanently remove the budget. Your expense records won't be affected.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">This will permanently remove the budget. Your expense records won&apos;t be affected.</p>
             <div className="flex justify-end gap-3">
               <button type="button" onClick={() => setDeletingId(null)} disabled={deleteMutation.isPending}
                 className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-40 transition-colors focus:outline-none">

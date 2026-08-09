@@ -11,7 +11,11 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
       devOptions: {
-        enabled: true,
+        // SW disabled in dev: stops Workbox from intercepting Vite module requests
+        // and flooding the console with 'Precaching did not find a match' / 'No route
+        // found' logs. Production builds still get the full service worker (globPatterns
+        // is gated on NODE_ENV below). Re-enable only if you need offline/PWA testing in dev.
+        enabled: false,
         type: 'module',
         suppressWarnings: true,
       },
@@ -54,8 +58,8 @@ export default defineConfig({
             urlPattern: /^https?:\/\/.*\/api\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'api-get-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }, // 24h
+              cacheName: 'api-get-cache-v2',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 }, // 1h — don't serve 24h-stale data after a backend move
               cacheableResponse: { statuses: [0, 200] },
             },
           },
@@ -64,8 +68,8 @@ export default defineConfig({
             urlPattern: /^\/api\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'api-get-cache-local',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+              cacheName: 'api-get-cache-local-v2',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },
@@ -75,7 +79,6 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@ledgr/types': path.resolve(__dirname, '../../packages/types/src/index.ts'),
       '@': path.resolve(__dirname, './src'),
     },
   },

@@ -127,7 +127,6 @@ function AddIncomeSheet({ year, month, onClose }: { year: number; month: number;
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           className={inp}
-          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
       </div>

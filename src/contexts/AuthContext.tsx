@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { setApiToken } from '../lib/api';
+import { API_BASE, setApiToken } from '../lib/api';
 
 interface AuthContextValue {
   accessToken: string | null;
@@ -20,12 +20,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiToken(accessToken);
   }, [accessToken]);
 
-  // Try to refresh token on mount (uses httpOnly cookie)
+  // Try to refresh token on mount (uses httpOnly cookie).
+  // Timeout + abort so a dead/unreachable API can't leave the app stuck on "Loading…".
   useEffect(() => {
-    const API_BASE = (import.meta.env.VITE_API_BASE_URL as string ?? '/api').replace(/\/$/, '');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+
     fetch(`${API_BASE}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
+      signal: controller.signal,
     })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
@@ -34,9 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        // Refresh failed — user needs to log in
+        // Refresh failed (network error, timeout, 4xx/5xx…) — user needs to log in.
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        clearTimeout(timer);
+        setLoading(false);
+      });
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, []);
 
   if (loading) {

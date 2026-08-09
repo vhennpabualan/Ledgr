@@ -137,7 +137,11 @@ function CategoryForm({ categories, onSuccess, onCancel, editing }: {
     if (!icon.trim()) return setFormError('Icon is required.');
     if (!/^#[0-9a-fA-F]{6}$/.test(color)) return setFormError('Color must be a valid hex (e.g. #6366f1).');
     const payload: CreateCategoryDTO = { name: trimmed, icon: icon.trim(), color, ...(parentId ? { parentId } : {}) };
-    editing ? updateMutation.mutate(payload) : createMutation.mutate(payload);
+    if (editing) {
+      updateMutation.mutate(payload);
+    } else {
+      createMutation.mutate(payload);
+    }
   }
 
   return (
@@ -249,7 +253,7 @@ function DeleteDialog({ category, onCancel, onConfirm, isPending, error }: {
         <h2 id="delete-cat-title" className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete category?</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           <span className="mr-1.5" aria-hidden="true">{category.icon}</span>
-          <strong>{category.name}</strong> will be permanently removed. Expenses won't be affected.
+          <strong>{category.name}</strong> will be permanently removed. Expenses won&apos;t be affected.
         </p>
         {error && <p role="alert" className="mb-4 rounded-xl bg-red-50/60 dark:bg-red-900/20 border border-red-200/60 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex justify-end gap-3">

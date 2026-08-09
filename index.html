@@ -12,7 +12,9 @@
     <meta name="apple-mobile-web-app-title" content="Ledgr" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- PWA manifest + SW are injected automatically at build time by vite-plugin-pwa.
+         No static link here: in dev the file does not exist, so a hardcoded <link>
+         would make Vite serve index.html for /manifest.webmanifest (JSON parse error). -->
     <!-- Apply theme before first paint to avoid flash -->
     <script>
       (function() {

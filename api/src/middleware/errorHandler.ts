@@ -21,6 +21,18 @@ export function errorHandler(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void {
+  // Malformed request bodies (body-parser throws entity.parse.failed) — 400, not 500
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'type' in err &&
+    (err as { type?: string }).type === 'entity.parse.failed'
+  ) {
+    logger.warn('Malformed request body', { requestId: req.requestId, path: req.path });
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Malformed request body' });
+    return;
+  }
+
   // Zod validation errors
   if (err instanceof ZodError) {
     const fields: Record<string, string> = {};

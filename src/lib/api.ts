@@ -30,6 +30,11 @@ import type {
   UpdateRecurringIncomeDTO,
 } from './types';
 
+// ─── API base ─────────────────────────────────────────────────────────────────
+// Single source of truth for the API origin. Vite injects VITE_API_BASE_URL at
+// build time; production falls back to same-origin /api. Trailing slash stripped.
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
+
 // ─── Token store ──────────────────────────────────────────────────────────────
 // Can't use React hooks in a module — use a plain variable instead.
 
@@ -42,8 +47,9 @@ export function setApiToken(token: string | null): void {
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+  baseURL: API_BASE,
   withCredentials: true, // send httpOnly refresh-token cookie automatically
+  timeout: 15_000, // fail fast instead of hanging forever on a dead/unreachable API
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -73,9 +79,9 @@ api.interceptors.response.use(
 
       try {
         const { data } = await axios.post<{ accessToken: string }>(
-          `${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/refresh`,
+          `${API_BASE}/auth/refresh`,
           {},
-          { withCredentials: true },
+          { withCredentials: true, timeout: 15_000 },
         );
 
         setApiToken(data.accessToken);

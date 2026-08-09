@@ -85,7 +85,7 @@ function ChangePasswordSection() {
             <input id="cp-confirm" type="password" placeholder="Confirm new password" value={confirm}
               onChange={(e) => setConfirm(e.target.value)} className={inputCls} autoComplete="new-password" />
             {confirm.length > 0 && next !== confirm && (
-              <p className="text-[11px] text-red-500 mt-1">Passwords don't match.</p>
+              <p className="text-[11px] text-red-500 mt-1">Passwords don&apos;t match.</p>
             )}
           </div>
           {error && <p className="text-xs text-red-500 dark:text-red-400" role="alert">{error}</p>}

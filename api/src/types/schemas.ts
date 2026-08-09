@@ -91,8 +91,12 @@ export type ExpenseFiltersInput = z.infer<typeof ExpenseFiltersSchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+  email: z
+    .string({ message: 'Please enter your email address' })
+    .email('Please enter a valid email address'),
+  password: z
+    .string({ message: 'Please enter your password' })
+    .min(8, 'Password must be at least 8 characters'),
 });
 
 export type LoginInput = z.infer<typeof LoginSchema>;
